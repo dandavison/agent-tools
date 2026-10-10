@@ -33,3 +33,14 @@ atuin() { [[ "$1 $2" = "history start" ]] && print -r -- $4 >> $recorded && prin
 BUFFER="list toucan photos"
 output=$(agent-suggest-command-widget 2>&1; print -r -- "$BUFFER|$(<$recorded)")
 [[ $output = "ls *.jpg|list toucan photos" ]]
+
+# Tab directly after a trailing "|" replaces the text with a suggested command; otherwise Tab completes.
+zle() { print -r -- "zle $*" }
+BUFFER="list toucan photos |"
+CURSOR=$#BUFFER
+[[ $({ agent-tab-widget; print -r -- "$BUFFER" } 2>&1 | grep -v '^zle ') = "ls *.jpg" ]]
+for text in "ls | " "true ||" "|" "echo toucan"; do
+    BUFFER=$text
+    CURSOR=$#BUFFER
+    [[ $(agent-tab-widget; print -r -- "$BUFFER") = "zle expand-or-complete"$'\n'"$text" ]]
+done
