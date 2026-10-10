@@ -24,3 +24,12 @@ source "${0:A:h:h}/shell/agent.zsh"
 zle() { : }
 BUFFER=""
 [[ -z $(agent-accept-line 2>&1) ]]
+
+# Ctrl-X Ctrl-A replaces the text in place, prints nothing, and records the text in atuin history.
+recorded=()
+agent-pick() { print -r -- '{"name": "luna"}' }
+agent-suggest-command() { [[ $AGENT_MODEL = luna ]] && print -r -- "ls *.jpg"; print -u2 -- "--- done ---" }
+atuin() { [[ "$1 $2" = "history start" ]] && recorded+=$4 && print -r -- id1; true }
+BUFFER="list toucan photos"
+output=$(agent-suggest-command-widget 2>&1; print -r -- "$BUFFER|$recorded")
+[[ $output = "ls *.jpg|list toucan photos" ]]
