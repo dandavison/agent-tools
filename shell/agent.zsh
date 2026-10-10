@@ -1,9 +1,10 @@
-# "? question" or "?MODEL question" at the prompt is sent to agent-run instead of to zsh.
+# A line ending in "??" or "??MODEL" is sent to agent-run as a question instead of to zsh.
+# This shadows a command line whose last word ends in a ?? glob.
 # Ctrl-X Ctrl-A replaces the prompt's text with a command suggested by agent-suggest-command.
 
 agent-question-command() {
-    [[ $1 =~ '^\?([[:alnum:]_.-]*) (.+)$' ]] || return 0
-    print -r -- "agent-run${match[1]:+ -m $match[1]} <<< ${(qq)match[2]}"
+    [[ $1 =~ '^(.+)\?\?([[:alnum:]_.-]*)[[:space:]]*$' ]] || return 0
+    print -r -- "agent-run${match[2]:+ -m $match[2]} <<< ${(qq)match[1]}"
 }
 
 agent-accept-line() {
