@@ -7,8 +7,7 @@ model via pi), from the command line and from zsh. It is specific to my setup.
 - `bin/agent-run`: run a prompt, or an executable prompt script, on that model. The answer goes
   to stdout, progress and cost to stderr.
 - `bin/agent-prices-refresh`: cache OpenRouter's model list, which supplies prices.
-- `bin/agent-with-input`, `bin/agent-from-issues`: start an interactive agent with its input
-  pre-filled.
+- `bin/agent-with-input`: start an interactive agent with its input pre-filled.
 - `bin/mlx-serve`: serve a local MLX model over an OpenAI-compatible API, for pi and qwen
   (`config/pi`, `config/qwen`).
 - `prompts/`: prompt scripts, e.g. `agent-suggest-command`.
