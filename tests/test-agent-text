@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Run: shell/tests/test-agent-text
+# Run: tests/test-agent-text
 set -eu
 
 export AGENT_MODELS=$(mktemp)
@@ -11,7 +11,7 @@ cli = "codex"
 model = "gpt-6-luna"
 EOF
 
-source "${0:A:h:h}/zsh/agent.zsh"
+source "${0:A:h:h}/shell/agent.zsh"
 
 [[ $(agent-text-command "what's in *.txt? |") = "agent-run <<< 'what'\\''s in *.txt?'" ]]
 [[ $(agent-text-command "fix the build|  ") = "agent-run <<< 'fix the build'" ]]

@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-TOOLS = Path(__file__).parent.parent
-SCRIPT_PATH = TOOLS / "python" / "agent-run"
+REPO = Path(__file__).parent.parent
+SCRIPT_PATH = REPO / "bin" / "agent-run"
 
 CONFIG = """
 [accounts.personal]
@@ -92,7 +92,7 @@ def home(tmp_path: Path) -> Path:
     bin_dir.mkdir()
     fake_cli(bin_dir / "claude", CLAUDE_EVENTS)
     fake_cli(bin_dir / "codex", CODEX_EVENTS)
-    (bin_dir / "agent-pick").symlink_to(TOOLS / "python" / "agent-pick")
+    (bin_dir / "agent-pick").symlink_to(REPO / "bin" / "agent-pick")
     return tmp_path
 
 

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_PATH = Path(__file__).parent.parent / "python" / "agent-pick"
+SCRIPT_PATH = Path(__file__).parent.parent / "bin" / "agent-pick"
 
 CONFIG = """
 [accounts.personal]
