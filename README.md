@@ -12,8 +12,9 @@ which amazonian birds visit clay licks, and why? |
 explain hoatzin digestion in two sentences | luna
 ```
 
-Type a description and press Ctrl-X Ctrl-A; it is replaced by a command to review and run. Undo
-(Ctrl-_) restores the description, which is also saved in atuin history:
+Type a description and press Ctrl-X Ctrl-A, or end it with `|` and press Tab; it is replaced by a
+command to review and run. Undo (Ctrl-_) restores the description, which is also saved in atuin
+history:
 
 ```
 find photos of toucans over 5MB in ~/Pictures
@@ -70,7 +71,7 @@ mlx-serve
 | `agent-from-issues` | Same, from GitHub issues. Reads `~/.config/agent-from-issues.toml`. |
 | `mlx-serve` | Serve a local MLX model over an OpenAI-compatible API. |
 | `agent-suggest-command` | The prompt script behind Ctrl-X Ctrl-A. |
-| `shell/agent.zsh` | The `\|` trigger and Ctrl-X Ctrl-A. |
+| `shell/agent.zsh` | The `\|` trigger, `\|` Tab, and Ctrl-X Ctrl-A. |
 
 ## Install
 

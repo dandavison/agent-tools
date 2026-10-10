@@ -2,7 +2,9 @@
 # instead of to zsh. A trailing "|" is incomplete shell syntax, but "| MODEL" shadows a real
 # pipeline into a command with that name.
 # Ctrl-X Ctrl-A replaces the prompt's text with a command suggested by agent-suggest-command. The
-# text is recorded in atuin history; undo (Ctrl-_) also restores it.
+# text is recorded in atuin history; undo (Ctrl-_) also restores it. Tab directly after a trailing
+# "|" does the same with the text before the "|"; this shadows completing a command name after a
+# pipe with no space.
 
 agent-text-command() {
     [[ $1 =~ '^(.*[^|[:space:]])[[:space:]]*\|[[:space:]]*([[:alnum:]_.-]*)[[:space:]]*$' ]] || return 0
@@ -25,15 +27,16 @@ agent-accept-line() {
 }
 
 agent-suggest-command-widget() {
-    [[ -n $BUFFER ]] || return
+    local text=${1:-$BUFFER}
+    [[ -n $text ]] || return
     local model=${AGENT_MODEL:-$(agent-pick | jq -r .name)}
     zle reset-prompt
     [[ -n $model ]] || return
     zle -M "asking $model..."
     zle -R
     local cmd err=$(mktemp)
-    if cmd=$(print -r -- "$BUFFER" | AGENT_MODEL=$model agent-suggest-command 2>$err); then
-        agent-record-history "$BUFFER"
+    if cmd=$(print -r -- "$text" | AGENT_MODEL=$model agent-suggest-command 2>$err); then
+        agent-record-history "$text"
         BUFFER=$cmd
         CURSOR=$#BUFFER
         zle -M ""
@@ -42,11 +45,20 @@ agent-suggest-command-widget() {
     fi
     rm -f $err
 }
+agent-tab-widget() {
+    if [[ -z $RBUFFER && $LBUFFER =~ '^(.*[^|[:space:]])[[:space:]]*\|$' ]]; then
+        agent-suggest-command-widget "$match[1]"
+    else
+        zle expand-or-complete
+    fi
+}
 agent-record-history() {
     atuin history end --exit 0 "$(atuin history start -- "$1")"
 }
 
 zle -N agent-accept-line
 zle -N agent-suggest-command-widget
+zle -N agent-tab-widget
 bindkey '^M' agent-accept-line
 bindkey '^x^a' agent-suggest-command-widget
+bindkey '^I' agent-tab-widget

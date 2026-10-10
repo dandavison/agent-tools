@@ -37,10 +37,10 @@ output=$(agent-suggest-command-widget 2>&1; print -r -- "$BUFFER|$(<$recorded)")
 # Tab directly after a trailing "|" replaces the text with a suggested command; otherwise Tab completes.
 zle() { print -r -- "zle $*" }
 BUFFER="list toucan photos |"
-CURSOR=$#BUFFER
+LBUFFER=$BUFFER RBUFFER=
 [[ $({ agent-tab-widget; print -r -- "$BUFFER" } 2>&1 | grep -v '^zle ') = "ls *.jpg" ]]
 for text in "ls | " "true ||" "|" "echo toucan"; do
     BUFFER=$text
-    CURSOR=$#BUFFER
+    LBUFFER=$BUFFER RBUFFER=
     [[ $(agent-tab-widget; print -r -- "$BUFFER") = "zle expand-or-complete"$'\n'"$text" ]]
 done
