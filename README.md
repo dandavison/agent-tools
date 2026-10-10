@@ -30,6 +30,13 @@ species < field-notes.md                           # answer on stdout, cost on s
 AGENT_MODEL=qwen-local species < field-notes.md    # override the model
 ```
 
+Start an interactive session:
+
+```
+agent                                              # pick a model with fzf
+agent --personal -m opus                           # personal account, no menu
+```
+
 Run a prompt directly:
 
 ```
@@ -54,6 +61,7 @@ mlx-serve
 
 | | |
 |-|-|
+| `agent` | Start an interactive session. Model: `$AGENT_MODEL`, else `-m`, else fzf. |
 | `agent-run` | Run a prompt or prompt script. Model: `$AGENT_MODEL`, else `-m`, else fzf. |
 | `agent-pick` | Choose a model from `config/agent-models.toml`. |
 | `agent-prices-refresh` | Cache OpenRouter's model list, used for codex costs. |

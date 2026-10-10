@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# agent [--personal] [-m MODEL] [ARG...]
+#
+# Start an interactive session of the model's agent CLI, passing ARGs to it. The model is
+# $AGENT_MODEL if set, else -m MODEL, else chosen with fzf (agent-pick).
+set -euo pipefail
+
+pick_args=()
+model=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --personal) pick_args+=(--personal); shift ;;
+        -m) model="$2"; shift 2 ;;
+        *) break ;;
+    esac
+done
+model="${AGENT_MODEL:-$model}"
+
+pick="$(agent-pick "${pick_args[@]}" ${model:+"$model"})"
+while IFS= read -r kv; do export "$kv"; done < <(jq -r '.env | to_entries[] | "\(.key)=\(.value)"' <<<"$pick")
+exec "$(jq -r .cli <<<"$pick")" --model "$(jq -r .model <<<"$pick")" "$@"
