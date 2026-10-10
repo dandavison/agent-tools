@@ -4,7 +4,9 @@ set -eu
 
 source "${0:A:h:h}/zsh/agent.zsh"
 
-[[ $(agent-question-command "? what's in *.txt?") = "agent-run <<< 'what'\\''s in *.txt?'" ]]
-[[ $(agent-question-command "?luna why") = "agent-run -m luna <<< 'why'" ]]
+[[ $(agent-question-command "what's in *.txt??") = "agent-run <<< 'what'\\''s in *.txt'" ]]
+[[ $(agent-question-command "why???") = "agent-run <<< 'why?'" ]]
+[[ $(agent-question-command "why??luna ") = "agent-run -m luna <<< 'why'" ]]
+[[ $(agent-question-command 'echo "what??"') = "" ]]
 [[ $(agent-question-command "ls ?") = "" ]]
-[[ $(agent-question-command "?") = "" ]]
+[[ $(agent-question-command "??") = "" ]]
