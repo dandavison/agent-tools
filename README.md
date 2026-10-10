@@ -12,7 +12,8 @@ which amazonian birds visit clay licks, and why? |
 explain hoatzin digestion in two sentences | luna
 ```
 
-Type a description and press Ctrl-X Ctrl-A; it is replaced by a command to review and run:
+Type a description and press Ctrl-X Ctrl-A; it is replaced by a command to review and run. Undo
+(Ctrl-_) restores the description, which is also saved in atuin history:
 
 ```
 find photos of toucans over 5MB in ~/Pictures
@@ -80,6 +81,6 @@ make test
 
 Then source `shell/agent.zsh` from your zshrc.
 
-Requires `uv`, `fzf`, `jq`, `rlwrap`, `tmux`, and whichever of `claude`, `codex`, `pi` you
+Requires `uv`, `fzf`, `jq`, `rlwrap`, `tmux`, `atuin`, and whichever of `claude`, `codex`, `pi` you
 configure. `agent-from-issues` also needs `gh-issue-to-md` from
 [dandavison/tools](https://github.com/dandavison/tools).
