@@ -18,7 +18,7 @@ agent-model-names() {
 }
 
 agent-accept-line() {
-    local cmd=$(agent-text-command $BUFFER)
+    local cmd=$(agent-text-command "$BUFFER")
     [[ -n $cmd ]] && BUFFER=$cmd
     zle accept-line
 }
