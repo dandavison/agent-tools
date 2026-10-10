@@ -1,29 +1,77 @@
 # agent-tools
 
-Tooling for running prompts and prompt scripts on a chosen model (claude, codex, or a local
-model via pi), from the command line and from zsh. It is specific to my setup.
+Run prompts on a model you choose (claude, codex, or a local model via pi) from the shell, from
+executable prompt scripts, and from the zsh prompt. Specific to my setup.
 
-- `bin/agent-pick`: choose a model from `config/agent-models.toml` (fzf, or by name).
-- `bin/agent-run`: run a prompt, or an executable prompt script, on that model. The answer goes
-  to stdout, progress and cost to stderr.
-- `bin/agent-prices-refresh`: cache OpenRouter's model list, which supplies prices.
-- `bin/agent-with-input`, `bin/agent-from-issues`: start an interactive agent with its input
-  pre-filled (from stdin, or from GitHub issues via `gh-issue-to-md`).
-- `bin/mlx-serve`: serve a local MLX model over an OpenAI-compatible API, for pi and qwen
-  (`config/pi`, `config/qwen`).
-- `prompts/`: prompt scripts, e.g. `agent-suggest-command`.
-- `shell/agent.zsh`: text ending in `|` or `| MODEL` is sent to agent-run; Ctrl-X Ctrl-A replaces
-  the input with a suggested command.
+## Examples
 
-A prompt script:
+Ask from the zsh prompt by ending the line with `|`, or `| MODEL`:
+
+```
+which amazonian birds visit clay licks, and why? |
+explain hoatzin digestion in two sentences | luna
+```
+
+Type a description and press Ctrl-X Ctrl-A; it is replaced by a command to review and run:
+
+```
+find photos of toucans over 5MB in ~/Pictures
+```
+
+Write a command in English (`~/bin/species`):
 
 ```
 #!/usr/bin/env -S agent-run -m luna
-Summarise my commits in this repo since yesterday as 3 bullet points.
+List every bird species in the input, one per line, with its scientific name.
 ```
 
-`$AGENT_MODEL` overrides `-m`; with neither, agent-run asks via fzf.
+```
+species < field-notes.md                           # answer on stdout, cost on stderr
+AGENT_MODEL=qwen-local species < field-notes.md    # override the model
+```
 
-`make install` symlinks `bin/*` and `prompts/*` into `~/bin` and the model config into
-`~/.config`. `make test` runs the tests. `config/pi` and `config/qwen` are symlinked by my
-devenv repo.
+Run a prompt directly:
+
+```
+agent-run                                          # pick a model with fzf, type a prompt
+echo "Is the harpy eagle endangered?" | agent-run -m haiku
+agent-run --personal -m opus < prompt.md           # use the personal account
+```
+
+Start an interactive agent with GitHub issues pasted into its input:
+
+```
+agent-from-issues -R macaw/field-guide 12 15
+```
+
+Serve a local model; while it runs, `qwen-local` is offered as a model:
+
+```
+mlx-serve
+```
+
+## Tools
+
+| | |
+|-|-|
+| `agent-run` | Run a prompt or prompt script. Model: `$AGENT_MODEL`, else `-m`, else fzf. |
+| `agent-pick` | Choose a model from `config/agent-models.toml`. |
+| `agent-prices-refresh` | Cache OpenRouter's model list, used for codex costs. |
+| `agent-with-input` | Start an interactive agent with its input pre-filled from stdin. |
+| `agent-from-issues` | Same, from GitHub issues. Reads `~/.config/agent-from-issues.toml`. |
+| `mlx-serve` | Serve a local MLX model over an OpenAI-compatible API. |
+| `agent-suggest-command` | The prompt script behind Ctrl-X Ctrl-A. |
+| `shell/agent.zsh` | The `\|` trigger and Ctrl-X Ctrl-A. |
+
+## Install
+
+```
+make install    # symlink bin/ and prompts/ into ~/bin, config/agent-models.toml into ~/.config
+make test
+```
+
+Then source `shell/agent.zsh` from your zshrc.
+
+Requires `uv`, `fzf`, `jq`, `rlwrap`, `tmux`, and whichever of `claude`, `codex`, `pi` you
+configure. `agent-from-issues` also needs `gh-issue-to-md` from
+[dandavison/tools](https://github.com/dandavison/tools).
