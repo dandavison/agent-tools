@@ -1,0 +1,22 @@
+#!/bin/zsh
+# Run: shell/tests/test-agent-text
+set -eu
+
+export AGENT_MODELS=$(mktemp)
+trap 'rm -f $AGENT_MODELS' EXIT
+cat > $AGENT_MODELS <<'EOF'
+[[models]]
+name = "luna"
+cli = "codex"
+model = "gpt-6-luna"
+EOF
+
+source "${0:A:h:h}/zsh/agent.zsh"
+
+[[ $(agent-text-command "what's in *.txt? |") = "agent-run <<< 'what'\\''s in *.txt?'" ]]
+[[ $(agent-text-command "fix the build|  ") = "agent-run <<< 'fix the build'" ]]
+[[ $(agent-text-command "explain this | luna") = "agent-run -m luna <<< 'explain this'" ]]
+[[ $(agent-text-command "ls | less") = "" ]]
+[[ $(agent-text-command "echo '|'") = "" ]]
+[[ $(agent-text-command "true ||") = "" ]]
+[[ $(agent-text-command "|") = "" ]]
