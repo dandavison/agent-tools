@@ -20,3 +20,7 @@ source "${0:A:h:h}/shell/agent.zsh"
 [[ $(agent-text-command "echo '|'") = "" ]]
 [[ $(agent-text-command "true ||") = "" ]]
 [[ $(agent-text-command "|") = "" ]]
+
+zle() { : }
+BUFFER=""
+[[ -z $(agent-accept-line 2>&1) ]]
