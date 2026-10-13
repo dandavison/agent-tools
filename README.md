@@ -8,8 +8,8 @@ executable prompt scripts, and from the zsh prompt. Specific to my setup.
 Ask from the zsh prompt by ending the line with `|`, or `| MODEL`:
 
 ```
-which amazonian birds visit clay licks, and why? |
-explain hoatzin digestion in two sentences | luna
+what is the difference between git rebase --onto and git rebase -i? |
+explain SO_REUSEPORT in two sentences | luna
 ```
 
 Type a description and press Ctrl-X Ctrl-A, or end it with `|` and press Tab; it is replaced by a
@@ -17,40 +17,41 @@ command to review and run. Undo (Ctrl-_) restores the description, which is also
 history:
 
 ```
-find photos of toucans over 5MB in ~/Pictures
+kill whatever is listening on port 8080
 ```
 
-Write a command in English (`~/bin/species`):
+Write a command in English (`~/bin/commit-msg`):
 
 ```
 #!/usr/bin/env -S agent-run -m luna
-List every bird species in the input, one per line, with its scientific name.
+Write a git commit message for the diff in the input. The first line says what problem the
+change solves.
 ```
 
 ```
-species < field-notes.md                           # answer on stdout, cost on stderr
-AGENT_MODEL=qwen-local species < field-notes.md    # override the model
+git diff --staged | commit-msg                       # answer on stdout, cost on stderr
+git diff --staged | AGENT_MODEL=opus commit-msg      # override the model
 ```
 
 Start an interactive session:
 
 ```
-agent                                              # pick a model with fzf
-agent --personal -m opus                           # personal account, no menu
+agent                                                # pick a model with fzf
+agent --personal -m opus                             # personal account, no menu
 ```
 
 Run a prompt directly:
 
 ```
-agent-run                                          # pick a model with fzf, type a prompt
-echo "Is the harpy eagle endangered?" | agent-run -m haiku
-agent-run --personal -m opus < prompt.md           # use the personal account
+agent-run                                            # pick a model with fzf, type a prompt
+{ echo "Why does this fail?"; go test ./... 2>&1; } | agent-run -m haiku
+agent-run --personal -m opus < prompt.md             # use the personal account
 ```
 
 Start an interactive agent with GitHub issues pasted into its input:
 
 ```
-agent-from-issues -R macaw/field-guide 12 15
+agent-from-issues -R myorg/myrepo 12 15
 ```
 
 Serve a local model; while it runs, `qwen-local` is offered as a model:
