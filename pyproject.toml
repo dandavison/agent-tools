@@ -1,0 +1,35 @@
+[project]
+name = "agent-tools"
+version = "0.1.0"
+description = "Run prompts and start agent sessions on a chosen model"
+readme = "README.md"
+authors = [
+    { name = "Dan Davison", email = "dandavison7@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.4.2",
+]
+
+[project.scripts]
+agent = "agent_tools.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.1",
+    "ty>=0.0.65",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

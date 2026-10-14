@@ -6,5 +6,5 @@ install:
 	ln -sf "$(CURDIR)/config/agent-models.toml" ~/.config/agent-models.toml
 
 test:
-	uv run --with pytest pytest tests -q
+	uv run pytest -q
 	tests/test-agent-text
