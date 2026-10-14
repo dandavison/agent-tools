@@ -7,6 +7,8 @@ import subprocess
 
 import click
 
+from agent_tools.ctx import OverBudget, SourceError, build
+
 SCRIPTS = {
     "with-input": """Start an interactive agent with its input pre-filled from stdin.
 
@@ -105,6 +107,38 @@ def start(ctx: click.Context, model: str | None, personal: bool) -> None:
     """
     agent = ctx.find_root().params
     start_session(model or agent["model"], personal or agent["personal"], ctx.args)
+
+
+@cli.command("ctx")
+@click.argument("sources", nargs=-1, required=True)
+@click.option("--purpose", help="What the context is for.")
+@click.option("--budget", type=int, help="Maximum tokens.")
+def ctx_command(
+    sources: tuple[str, ...], purpose: str | None, budget: int | None
+) -> None:
+    """Print an agent's context, built from SOURCES, as Markdown.
+
+    It starts with a manifest of the sources and their token counts. Every source is
+    included raw; if they exceed --budget, the manifest goes to stderr and nothing is
+    output.
+
+    \b
+    issue:N | issue:URL | GITHUB_ISSUE_URL   gh-issue-to-md (N: log repo)
+    session:ID                               agent-sessions cat
+    slack:URL | SLACK_URL                    slack-to-md
+    meeting:QUERY                            tracecli transcript
+    path:GLOB                                matching files
+    \b
+    agent ctx --purpose "implement batch cancel" --budget 80000 issue:212 \\
+        session:claude:7e90a7c6 | agent with-input
+    """
+    try:
+        click.echo(build(list(sources), purpose, budget), nl=False)
+    except OverBudget as e:
+        click.echo(e.manifest, err=True, nl=False)
+        raise click.ClickException("over budget; compression is not implemented") from e
+    except SourceError as e:
+        raise click.ClickException(str(e)) from e
 
 
 def script_command(name: str, help: str) -> click.Command:

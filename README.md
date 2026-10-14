@@ -55,6 +55,15 @@ Start an interactive agent with GitHub issues pasted into its input:
 agent from-issues -R myorg/myrepo 12 15
 ```
 
+Start an interactive agent whose input is built from sources (issues, sessions, Slack
+threads, meetings, files), with a manifest of what went in. `agent ctx --help` lists the
+source types:
+
+```
+agent ctx --purpose "implement batch cancel" --budget 80000 \
+    issue:212 session:claude:7e90a7c6 meeting:"design review" | agent with-input
+```
+
 Serve a local model; while it runs, `qwen-local` is offered as a model:
 
 ```
@@ -72,6 +81,7 @@ also be run directly as `agent-<subcommand>`.
 | `agent run` | Run a prompt or prompt script. Model: `$AGENT_MODEL`, else `-m`, else fzf. |
 | `agent pick` | Choose a model from `config/agent-models.toml`. |
 | `agent prices-refresh` | Cache OpenRouter's model list, used for codex costs. |
+| `agent ctx` | Build an agent's context from sources within a token budget. No compression yet. |
 | `agent with-input` | Start an interactive agent with its input pre-filled from stdin. |
 | `agent from-issues` | Same, from GitHub issues. Reads `~/.config/agent-from-issues.toml`. |
 | `agent mlx-serve` | Serve a local MLX model over an OpenAI-compatible API. |
