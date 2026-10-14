@@ -105,11 +105,12 @@ def test_agent_model_env_overrides_m(home: Path) -> None:
     assert argv(home, "codex") == ["--model", "gpt-6-luna"]
 
 
-def test_help_lists_every_subcommand(home: Path) -> None:
+def test_help_documents_every_subcommand_in_full(home: Path) -> None:
     result = run(home, "--help")
     assert result.returncode == 0, result.stderr
     for subcommand in ["start", *WRAPPED]:
-        assert f"\n  {subcommand} " in result.stdout, subcommand
+        assert f"\n  {subcommand}\n" in result.stdout, subcommand
+    assert "agent from-issues [-R OWNER/REPO]" in result.stdout
 
 
 @pytest.mark.parametrize("subcommand", [w for w in WRAPPED if w != "pick"])
