@@ -167,9 +167,21 @@ def test_tool_call_detail_truncated_to_columns(home: Path) -> None:
             "type": "assistant",
             "message": {
                 "content": [
-                    {"type": "tool_use", "name": "Bash", "input": {"command": "ls " + "x" * 100}},
-                    {"type": "tool_use", "name": "Read", "input": {"file_path": "/a/b.py"}},
-                    {"type": "tool_use", "name": "Read", "input": {"file_path": "/c/d.py"}},
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {"command": "ls " + "x" * 100},
+                    },
+                    {
+                        "type": "tool_use",
+                        "name": "Read",
+                        "input": {"file_path": "/a/b.py"},
+                    },
+                    {
+                        "type": "tool_use",
+                        "name": "Read",
+                        "input": {"file_path": "/c/d.py"},
+                    },
                 ]
             },
         },
@@ -178,7 +190,7 @@ def test_tool_call_detail_truncated_to_columns(home: Path) -> None:
     fake_cli(home / "bin" / "claude", events)
     result = run(home, "-m", "opus", stdin="hello", env={"COLUMNS": "40"})
     lines = result.stderr.splitlines()
-    assert lines[0] == "[tool: Bash] ls " + "x" * 22 + "…"[:0] or len(lines[0]) <= 40
+    assert lines[0].startswith("[tool: Bash] ls xxx")
     assert lines[1] == "[tool: Read] /a/b.py"
     assert lines[2] == "[tool: Read] /c/d.py"
     assert all(len(line) <= 40 for line in lines[:3])

@@ -18,6 +18,7 @@ claude and pi; codex cannot disable them, so it gets a read-only sandbox instead
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -92,10 +93,7 @@ def run_claude(pick: dict[str, Any], prompt: str, no_tools: bool) -> int:
                     if block["type"] == "text":
                         progress.answer(block["text"])
                     elif block["type"] == "tool_use":
-                        name = block["name"]
-                        if name == "Skill":
-                            name = f"Skill({block['input'].get('skill')})"
-                        progress.tool(name)
+                        progress.tool(block["name"], tool_detail(block["input"]))
             elif event["type"] == "result":
                 cost = event.get("total_cost_usd") or 0
                 progress.done(
@@ -120,7 +118,7 @@ def run_codex(pick: dict[str, Any], prompt: str, no_tools: bool) -> int:
         for event in events(proc.stdout):
             item = event.get("item", {})
             if event["type"] == "item.started":
-                progress.tool(item["type"])
+                progress.tool(item["type"], item.get("command", ""))
             elif event["type"] == "item.completed" and item["type"] == "agent_message":
                 progress.answer(item["text"])
             elif event["type"] == "item.completed" and item["type"] == "error":
@@ -145,6 +143,13 @@ def events(stdout: IO[str] | None) -> Any:
         yield json.loads(line)
 
 
+def tool_detail(tool_input: dict[str, Any]) -> str:
+    for key in ("command", "file_path", "path", "pattern", "skill", "url", "query"):
+        if key in tool_input:
+            return " ".join(str(tool_input[key]).split())
+    return ""
+
+
 def codex_usage(usage: dict[str, int], price: dict[str, float] | None) -> str:
     if price is None:
         return f"{usage['input_tokens'] + usage['output_tokens']} tokens"
@@ -159,36 +164,21 @@ def codex_usage(usage: dict[str, int], price: dict[str, float] | None) -> str:
 
 
 class Progress:
-    """Answer text to stdout; tool calls and status to stderr, repeated tool calls as dots."""
-
-    def __init__(self) -> None:
-        self.last_tool: str | None = None
+    """Answer text to stdout; one line per tool call and status to stderr."""
 
     def answer(self, text: str) -> None:
-        self._end_dots()
         print(text, flush=True)
 
-    def tool(self, name: str) -> None:
-        if name == self.last_tool:
-            sys.stderr.write(f"{DIM}·{RESET}")
-            sys.stderr.flush()
-            return
-        self._end_dots()
-        self.last_tool = name
-        sys.stderr.write(f"{DIM}[tool: {name}]{RESET}")
-        sys.stderr.flush()
+    def tool(self, name: str, detail: str = "") -> None:
+        width = shutil.get_terminal_size().columns
+        line = f"[tool: {name}] {detail}".rstrip()
+        self.note(line if len(line) <= width else line[: width - 1] + "…")
 
     def note(self, text: str) -> None:
-        self._end_dots()
         print(f"{DIM}{text}{RESET}", file=sys.stderr, flush=True)
 
     def done(self, summary: str) -> None:
         self.note(f"--- done: {summary} ---")
-
-    def _end_dots(self) -> None:
-        if self.last_tool is not None:
-            sys.stderr.write("\n")
-            self.last_tool = None
 
 
 if __name__ == "__main__":
