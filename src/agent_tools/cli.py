@@ -80,7 +80,7 @@ class Agent(click.Group):
     context_settings={"ignore_unknown_options": True},
 )
 @click.option("-m", "model", help="Model name from ~/.config/agent-models.toml.")
-@click.option("--personal", is_flag=True, help="Use the personal account.")
+@click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
 @click.pass_context
 def cli(ctx: click.Context, model: str | None, personal: bool) -> None:
     """Start agent sessions and run prompts on a chosen model.
@@ -97,7 +97,7 @@ def cli(ctx: click.Context, model: str | None, personal: bool) -> None:
     context_settings={"ignore_unknown_options": True, "allow_extra_args": True}
 )
 @click.option("-m", "model", help="Model name from ~/.config/agent-models.toml.")
-@click.option("--personal", is_flag=True, help="Use the personal account.")
+@click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
 @click.pass_context
 def start(ctx: click.Context, model: str | None, personal: bool) -> None:
     """Start an interactive session, passing other arguments to the model's CLI.
