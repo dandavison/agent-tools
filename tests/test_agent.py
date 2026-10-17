@@ -118,3 +118,14 @@ def test_subcommand_runs_its_script_with_args(home: Path, subcommand: str) -> No
     result = run(home, subcommand, "-m", "opus", "--", "x")
     assert result.returncode == 0, result.stderr
     assert argv(home, f"agent-{subcommand}") == ["-m", "opus", "--", "x"]
+
+
+def test_ctrl_c_in_pick_exits_without_traceback(home: Path) -> None:
+    pick = home / "bin" / "agent-pick"
+    pick.unlink()
+    pick.write_text("#!/usr/bin/env bash\nexit 130\n")
+    pick.chmod(0o755)
+    result = run(home)
+    assert result.returncode == 130
+    assert "Traceback" not in result.stderr
+    assert not (home / "bin" / "claude.argv").exists()

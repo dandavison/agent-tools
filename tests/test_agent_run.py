@@ -222,3 +222,11 @@ def test_no_tools_codex_is_read_only(home: Path) -> None:
     assert result.returncode == 0, result.stderr
     argv = (home / "bin" / "codex.argv").read_text().splitlines()
     assert argv[argv.index("--sandbox") + 1] == "read-only"
+
+
+def test_ctrl_c_exits_without_traceback(home: Path) -> None:
+    claude = home / "bin" / "claude"
+    claude.write_text("#!/usr/bin/env bash\nkill -INT $PPID\nsleep 1\n")
+    result = run(home, "-m", "opus", stdin="hello")
+    assert result.returncode == 130
+    assert "Traceback" not in result.stderr

@@ -133,3 +133,23 @@ def test_missing_price_cache_fails(config: Path) -> None:
     result = run(config, "luna")
     assert result.returncode != 0
     assert "agent-prices-refresh" in result.stderr
+
+
+def test_ctrl_c_in_fzf_exits_without_traceback(config: Path) -> None:
+    fzf = config.parent / "fzf"
+    fzf.write_text("#!/usr/bin/env bash\nkill -INT $PPID\nsleep 1\nexit 130\n")
+    fzf.chmod(0o755)
+    result = subprocess.run(
+        [str(SCRIPT_PATH)],
+        capture_output=True,
+        check=False,
+        text=True,
+        env={
+            **os.environ,
+            "PATH": f"{config.parent}:{os.environ['PATH']}",
+            "AGENT_MODELS": str(config),
+            "AGENT_PRICES": str(config.parent / "openrouter-models.json"),
+        },
+    )
+    assert result.returncode == 130
+    assert "Traceback" not in result.stderr
