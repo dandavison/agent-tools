@@ -129,3 +129,17 @@ def test_ctrl_c_in_pick_exits_without_traceback(home: Path) -> None:
     assert result.returncode == 130
     assert "Traceback" not in result.stderr
     assert not (home / "bin" / "claude.argv").exists()
+
+
+@pytest.mark.parametrize("words", ["agent -m ", "agent start -m "])
+def test_m_completes_model_names(home: Path, words: str) -> None:
+    result = run(
+        home,
+        env={
+            "_AGENT_COMPLETE": "bash_complete",
+            "COMP_WORDS": words,
+            "COMP_CWORD": str(len(words.split())),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["plain,opus", "plain,luna"]
