@@ -164,9 +164,10 @@ def pick_model(model: str | None, personal: bool) -> dict:
         *(["--personal"] if personal else []),
         *([model] if model else []),
     ]
-    return json.loads(
-        subprocess.run(argv, check=True, stdout=subprocess.PIPE, text=True).stdout
-    )
+    result = subprocess.run(argv, check=False, stdout=subprocess.PIPE, text=True)
+    if result.returncode:
+        raise SystemExit(result.returncode)
+    return json.loads(result.stdout)
 
 
 def main() -> None:

@@ -119,4 +119,7 @@ def find(models: list[dict[str, Any]], name: str) -> dict[str, Any]:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
