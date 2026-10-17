@@ -79,7 +79,12 @@ class Agent(click.Group):
     invoke_without_command=True,
     context_settings={"ignore_unknown_options": True},
 )
-@click.option("-m", "model", help="Model name from ~/.config/agent-models.toml.")
+@click.option(
+    "-m",
+    "model",
+    help="Model name from ~/.config/agent-models.toml.",
+    shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
+)
 @click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
 @click.pass_context
 def cli(ctx: click.Context, model: str | None, personal: bool) -> None:
@@ -96,7 +101,12 @@ def cli(ctx: click.Context, model: str | None, personal: bool) -> None:
 @cli.command(
     context_settings={"ignore_unknown_options": True, "allow_extra_args": True}
 )
-@click.option("-m", "model", help="Model name from ~/.config/agent-models.toml.")
+@click.option(
+    "-m",
+    "model",
+    help="Model name from ~/.config/agent-models.toml.",
+    shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
+)
 @click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
 @click.pass_context
 def start(ctx: click.Context, model: str | None, personal: bool) -> None:
@@ -168,6 +178,14 @@ def pick_model(model: str | None, personal: bool) -> dict:
     if result.returncode:
         raise SystemExit(result.returncode)
     return json.loads(result.stdout)
+
+
+def model_names(prefix: str) -> list[str]:
+    stdout = subprocess.run(
+        ["agent-pick", "--list"], check=True, stdout=subprocess.PIPE, text=True
+    ).stdout
+    names = [line.split()[0] for line in stdout.splitlines()]
+    return [name for name in names if name.startswith(prefix)]
 
 
 def main() -> None:
