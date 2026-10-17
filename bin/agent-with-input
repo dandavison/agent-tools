@@ -48,9 +48,9 @@ send_newline() {
             fi
             sleep 0.5
         done
-        sleep 1.5
+        sleep 2.5
     else
-        sleep 3
+        sleep 4
     fi
 
     tmux paste-buffer -p -d -b "$buffer" -t "$pane"
