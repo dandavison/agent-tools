@@ -33,7 +33,7 @@ from agent_sessions import (
 )
 from agent_sessions.agents import NotInstalled
 from agent_sessions.forget import forget as forget_session
-from agent_sessions.models import Block
+from agent_sessions.models import Block, Said
 from agent_sessions.render import Format, Renderer
 from agent_sessions.resume import resume as resume_session
 from agent_sessions.wormhole import WormholeUnavailable
@@ -312,13 +312,15 @@ Examples
   $ agent-sessions cat claude:7e90a7c6 --tools         # the whole thing
   $ agent-sessions cat claude:7e90a7c6 --last          # only the turn just had
   $ agent-sessions cat claude:7e90a7c6@9f3c1d20        # only the turn around a point
+  $ agent-sessions cat claude:7e90a7c6@9f3c1d20 --upto # everything up to that turn's end
 """
 )
 @click.argument("id", metavar="ID[@POINT]")
 @click.option("--tools", is_flag=True, help="Include tool calls and their output.")
 @click.option("--whole", is_flag=True, help="Include branches that were abandoned.")
 @click.option("--last", is_flag=True, help="Only the most recent turn.")
-def cat(id: str, tools: bool, whole: bool, last: bool) -> None:
+@click.option("--upto", is_flag=True, help="Everything up to the end of the point's turn.")
+def cat(id: str, tools: bool, whole: bool, last: bool, upto: bool) -> None:
     """Print a session as markdown, read from the transcript itself.
 
     Not from the index, which holds no tool output: `--tools` is the only way
@@ -334,6 +336,10 @@ def cat(id: str, tools: bool, whole: bool, last: bool) -> None:
     """
     conn = db.connect()
     session, at = _resolve_point(conn, id)
+    if upto and (not at or whole or last):
+        raise click.UsageError(
+            "--upto takes a point on the live thread, without --last or --whole."
+        )
     if at and last:
         raise click.UsageError("--last and a point name different turns. Ask for one of them.")
     source = index.SOURCES[session["agent"]]
@@ -341,22 +347,41 @@ def cat(id: str, tools: bool, whole: bool, last: bool) -> None:
     if not path.exists():
         raise click.UsageError(f"{path} is gone. Run `agent-sessions sync`.")
     conversation = source.blocks(path, tip=True, whole=whole)
-    if at or last:
+    if upto:
+        conversation = _upto(conversation, at)
+    elif at or last:
         conversation = _one_turn(conversation, at, last)
     _write(source.render_blocks(conversation, tools=tools))
+
+
+def _upto(conversation: list[Block], at: str) -> list[Block]:
+    """The conversation as it stood when the point's turn ended: where resuming at it forks."""
+    keys = [t.key for t in models.turns(conversation)]
+    following = keys[keys.index(_turn_at(conversation, at).key) + 1 :]
+    if not following:
+        return conversation
+    return conversation[
+        : next(
+            i for i, b in enumerate(conversation) if isinstance(b, Said) and b.uuid == following[0]
+        )
+    ]
+
+
+def _turn_at(conversation: list[Block], at: str) -> models.Turn:
+    turn = models.turn_at(conversation, at)
+    if turn is None:
+        raise click.UsageError(
+            f"{display.point(at)} is in no turn of this session."
+            " Try a point from `agent-sessions show --turns`."
+        )
+    return turn
 
 
 def _one_turn(conversation: list[Block], at: str, last: bool) -> list[Block]:
     said = models.turns(conversation)
     if not said:
         raise click.UsageError("nothing was asked in this session, so it holds no turn.")
-    turn = said[-1] if last else models.turn_at(conversation, at)
-    if turn is None:
-        raise click.UsageError(
-            f"{display.point(at)} is in no turn of this session."
-            " Try a point from `agent-sessions show --turns`."
-        )
-    return turn.whole
+    return (said[-1] if last else _turn_at(conversation, at)).whole
 
 
 def _write(chunks: Iterator[str]) -> None:
