@@ -27,7 +27,15 @@ cli = "codex"
 model = "gpt-6-luna"
 """
 
-WRAPPED = ["with-input", "from-issues", "run", "pick", "prices-refresh", "mlx-serve"]
+WRAPPED = [
+    "with-input",
+    "from-issues",
+    "run",
+    "pick",
+    "prices-refresh",
+    "mlx-serve",
+    "prepare-session",
+]
 
 
 @pytest.fixture
@@ -118,6 +126,12 @@ def test_subcommand_runs_its_script_with_args(home: Path, subcommand: str) -> No
     result = run(home, subcommand, "-m", "opus", "--", "x")
     assert result.returncode == 0, result.stderr
     assert argv(home, f"agent-{subcommand}") == ["-m", "opus", "--", "x"]
+
+
+def test_prepare_session_is_a_prompt_script_run_by_agent_run() -> None:
+    script = REPO / "prompts" / "agent-prepare-session"
+    assert os.access(script, os.X_OK)
+    assert script.read_text().startswith("#!/usr/bin/env -S agent-run ")
 
 
 def test_ctrl_c_in_pick_exits_without_traceback(home: Path) -> None:
