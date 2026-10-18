@@ -1,8 +1,9 @@
 #!/bin/bash
 #
-# agent-with-input [-- <agent> [<arg>...]]
+# agent-with-input [--personal] [-m MODEL] [-- <agent> [<arg>...]]
 #
-# Start an interactive agent session (default: claude) with the input buffer
+# Start an interactive agent session (model chosen via agent-pick, unless an
+# explicit agent command follows "--") with the input buffer
 # pre-seeded with stdin, delivered as a bracketed paste so the agent UI
 # collapses it to a placeholder. A "--" separator line is appended and the
 # cursor is left after it. Nothing is submitted.
@@ -12,14 +13,25 @@
 
 set -euo pipefail
 
-agent=(claude)
-if [[ ${1:-} == "--" ]]; then
-    shift
-    if [[ $# -gt 0 ]]; then agent=("$@"); fi
-elif [[ $# -gt 0 ]]; then
-    echo "Usage: agent-with-input [-- <agent> [<arg>...]]" >&2
-    exit 1
-fi
+usage="Usage: agent-with-input [--personal] [-m MODEL] [-- <agent> [<arg>...]]"
+pick_args=()
+agent=()
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--personal" ]]; then
+        pick_args+=(--personal)
+        shift
+    elif [[ "$1" == "-m" && $# -ge 2 ]]; then
+        pick_args+=("$2")
+        shift 2
+    elif [[ "$1" == "--" ]]; then
+        shift
+        if [[ $# -gt 0 ]]; then agent=("$@"); fi
+        break
+    else
+        echo "$usage" >&2
+        exit 1
+    fi
+done
 
 if [[ -z "${TMUX:-}" ]]; then
     echo "Error: agent-with-input must be run inside tmux" >&2
@@ -29,6 +41,13 @@ fi
 if [[ -t 0 ]]; then
     echo "Error: agent-with-input expects input on stdin" >&2
     exit 1
+fi
+
+# Pick before the helper below starts, so that it cannot paste into fzf.
+if [[ ${#agent[@]} -eq 0 ]]; then
+    pick="$(agent-pick ${pick_args[@]+"${pick_args[@]}"})"
+    while IFS= read -r kv; do export "$kv"; done < <(jq -r '.env | to_entries[] | "\(.key)=\(.value)"' <<<"$pick")
+    agent=("$(jq -r .cli <<<"$pick")" --model "$(jq -r .model <<<"$pick")")
 fi
 
 pane="$TMUX_PANE"

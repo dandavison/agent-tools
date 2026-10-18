@@ -14,7 +14,7 @@ SCRIPTS = {
     "with-input": """Start an interactive agent with its input pre-filled from stdin.
 
     \b
-    agent with-input [-- AGENT [ARG...]] < FILE
+    agent with-input [--personal] [-m MODEL] [-- AGENT [ARG...]] < FILE
     Requires tmux. Nothing is submitted.""",
     "from-issues": """Start an interactive agent with GitHub issues pre-filled in its input.
 
