@@ -105,15 +105,32 @@ Turn each of Dan's exclusions into a rule with a stated reason. A rule can be ab
   git repo or the log issues, must first be posted to a log issue as a comment, after Dan
   approves; then use that comment as the source.
 - Re-read, just before relying on it, any issue that others may have edited.
+- Put the latest state first. If the hub has a handoff or other write-back that records the
+  current state, make it the first source, by comment-level selection
+  (`issue:N#issuecomment-ID`), and leave it out of the full issue that follows
+  (`issue:N exclude=issuecomment-ID`), so that B reads it first and only once. In a long
+  issue it is otherwise buried, and B misses what it says.
 - Choose a budget. Build the draft with `agent ctx <draft>`; it fails with the manifest on
   stderr if the sources exceed the budget. Report the manifest.
 
 ## 5. Write the purpose
 
 The purpose is B's first instruction. It says what B is for, where B works (repos and
-directories), what B must never edit, and what B does first: read everything, then state its
-understanding and its open questions, and wait for Dan before doing any work. It also says
-what B reports back, and where B writes back what it learns (which log issue).
+directories), what B must never edit, what B reports back, and where B writes back what it
+learns (which log issue).
+
+It also says what B does first. Dan may start B with the context alone, or type a request
+after it before sending. So the purpose says: read everything; if nothing follows the
+context, state your understanding and your open questions, and wait for Dan; if Dan added a
+request after the context, state your understanding in a few lines, then do the request.
+Either way, B asks only questions that its sources do not answer.
+
+When B works on code, the purpose gives the paths of the repos and checkouts, and says to
+check a claim in the code whenever an answer depends on it, rather than re-reading the code
+up front. Documents can be stale; the code at the stated commits is authoritative.
+
+When the hub holds a handoff or other write-back that records the latest state, the purpose
+names it, and says it overrides older material in the sources where they disagree.
 
 ## 6. Finalize
 

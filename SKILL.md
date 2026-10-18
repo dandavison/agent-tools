@@ -63,7 +63,9 @@ not see), the procedure is a script; do not do its steps yourself.
    Repeat until it prints a saved recipe path and a command.
 4. Give the user that command. Never run it, and never start the session any other way.
 
-The session's first job is to state its understanding and open questions. It writes back
+The session's first job is to state its understanding and open questions, and wait. If the
+user types a request after the context before sending, it states its understanding briefly
+and then does the request. The latest state (a handoff) comes first in its context. It writes back
 what it learns to the topic's issue. When it grows too large, it is rebuilt from its recipe,
 which then picks up the written-back state:
 
