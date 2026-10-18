@@ -64,6 +64,15 @@ agent ctx --purpose "implement batch cancel" --budget 80000 \
     issue:212 session:claude:7e90a7c6 meeting:"design review" | agent with-input
 ```
 
+Describe a session in plain language (its purpose, what it should know, what it must not
+see) and have an agent prepare a saved recipe for it, checking exclusions by provenance and
+stopping for approval. It prints the command that starts the session; it never starts it:
+
+```
+agent prepare-session "implement phase 1 of streams without seeing Moe's work"
+agent ctx ~/src/temporalio-etc/log/recipes/streams-implementer.toml | agent with-input
+```
+
 Serve a local model; while it runs, `qwen-local` is offered as a model:
 
 ```
@@ -81,7 +90,8 @@ also be run directly as `agent-<subcommand>`.
 | `agent run` | Run a prompt or prompt script. Model: `$AGENT_MODEL`, else `-m`, else fzf. |
 | `agent pick` | Choose a model from `config/agent-models.toml`. |
 | `agent prices-refresh` | Cache OpenRouter's model list, used for codex costs. |
-| `agent ctx` | Build an agent's context from sources within a token budget. No compression yet. |
+| `agent ctx` | Build an agent's context from sources or a recipe within a token budget. No compression yet. |
+| `agent prepare-session` | The prompt script that prepares a recipe. Skill: `skills/prepare-session`. |
 | `agent with-input` | Start an interactive agent with its input pre-filled from stdin. |
 | `agent from-issues` | Same, from GitHub issues. Reads `~/.config/agent-from-issues.toml`. |
 | `agent mlx-serve` | Serve a local MLX model over an OpenAI-compatible API. |
