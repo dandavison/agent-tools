@@ -26,7 +26,7 @@ SCRIPTS = {
     \b
     agent run [--personal] [-m MODEL] [--no-tools]                prompt from stdin
     agent run [--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script""",
-    "pick": """Choose a model (fzf, or by name) and print it as JSON.
+    "pick": """Choose a model ($AGENT_MODEL, else NAME, else fzf) and print it as JSON.
 
     \b
     agent pick [--personal] [--list] [NAME]""",
@@ -184,7 +184,7 @@ for name, help in SCRIPTS.items():
 
 
 def start_session(model: str | None, personal: bool, args: list[str]) -> None:
-    pick = pick_model(os.environ.get("AGENT_MODEL") or model, personal)
+    pick = pick_model(model, personal)
     os.environ.update(pick["env"])
     os.execvp(pick["cli"], [pick["cli"], "--model", pick["model"], *args])
 

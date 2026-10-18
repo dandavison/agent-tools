@@ -4,7 +4,9 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Choose a model from ~/.config/agent-models.toml (fzf, or by name) and print it as JSON.
+"""Choose a model from ~/.config/agent-models.toml and print it as JSON.
+
+The model is $AGENT_MODEL if set, else NAME, else chosen with fzf.
 
 Output: {"name", "cli", "model", "env", "price"}, where env holds the account's variables if
 --personal, and price is the model's USD per million tokens (from the OpenRouter model list
@@ -43,7 +45,8 @@ def main() -> None:
     if args.list:
         print(format_rows(models), end="")
         return
-    model = find(models, args.name or fzf(models, args.personal))
+    name = os.environ.get("AGENT_MODEL") or args.name
+    model = find(models, name or fzf(models, args.personal))
     env = config["accounts"]["personal"] if args.personal else {}
     print(
         json.dumps(

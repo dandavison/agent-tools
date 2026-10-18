@@ -38,7 +38,7 @@ def main() -> None:
     parser.add_argument("args", nargs="*")
     args = parser.parse_args()
 
-    pick = pick_model(os.environ.get("AGENT_MODEL") or args.model, args.personal)
+    pick = pick_model(args.model, args.personal)
     os.environ.update(pick["env"])
     prompt = script_prompt(args.file, args.args) if args.file else terminal_prompt()
     run = {"claude": run_claude, "codex": run_codex, "pi": run_pi}[pick["cli"]]
@@ -46,7 +46,7 @@ def main() -> None:
 
 
 def pick_model(name: str | None, personal: bool) -> dict[str, Any]:
-    if not name and not sys.stderr.isatty():
+    if not (name or os.environ.get("AGENT_MODEL")) and not sys.stderr.isatty():
         sys.exit("agent-run: no model: set AGENT_MODEL or pass -m")
     result = subprocess.run(
         [
