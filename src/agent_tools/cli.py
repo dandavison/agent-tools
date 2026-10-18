@@ -31,6 +31,13 @@ SCRIPTS = {
     \b
     agent pick [--personal] [--list] [NAME]""",
     "prices-refresh": "Cache OpenRouter's model list, used for codex costs.",
+    "prepare-session": """Prepare a context recipe for a new session described in plain language.
+
+    \b
+    agent prepare-session "DESCRIPTION OF THE SESSION"
+    agent prepare-session RECIPE.draft.toml "REPLY TO THE DRAFT"
+    Each run stops at a draft for approval. The last prints the command that starts
+    the session; it never starts it.""",
     "mlx-serve": """Serve a local MLX model over an OpenAI-compatible API.
 
     \b
