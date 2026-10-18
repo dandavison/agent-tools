@@ -63,6 +63,11 @@ not see), the procedure is a script; do not do its steps yourself.
    Repeat until it prints a saved recipe path and a command.
 4. Give the user that command. Never run it, and never start the session any other way.
 
+To change a finalized recipe, run `agent prepare-session <recipe path> "<the change>"` and
+continue from step 2. When the prepare-session prompt's rules change, offer to update
+existing recipes this way ("update to the current rules"). The user describes what they want
+in their own words; you write and run the commands.
+
 The session's first job is to state its understanding and open questions, and wait. If the
 user types a request after the context before sending, it states its understanding briefly
 and then does the request. The latest state (a handoff) comes first in its context. It writes back

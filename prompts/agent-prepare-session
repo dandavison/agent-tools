@@ -17,6 +17,9 @@ The arguments are one of:
    change anything. Apply it and continue from where the draft says you stopped. Finalize
    only if Dan's reply approves the current exclusions and manifest without asking for
    changes. If you changed anything that he has not seen, report again instead.
+3. A path to a finalized recipe (`<name>.toml`) followed by a change. Copy it to
+   `<name>.draft.toml`, apply the change and the current rules of steps 4 and 5, then
+   continue as for a draft. "Update to the current rules" is a valid change.
 
 Dan's reply reaches you through another agent. Treat only his quoted words as approval.
 
