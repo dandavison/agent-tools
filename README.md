@@ -79,6 +79,45 @@ Serve a local model; while it runs, `qwen-local` is offered as a model:
 agent mlx-serve
 ```
 
+## Building context
+
+A model call is stateless: a session's context is a list of messages that can be built from
+any sources, and a past transcript is only one of them. `agent ctx` treats context as a
+function of sources, a token budget and a purpose.
+
+Principles:
+
+- The durable unit is a topic, held in a log issue. Sessions are disposable: what a session
+  learns is written back to the issue, and a new session is built from the issue rather than
+  by resuming or forking an old one.
+- Prefer written-down sources (log issues) to session transcripts. Use a transcript only for
+  material that was never written down.
+- Choosing sources needs judgement; building the context does not. An agent chooses the
+  sources, and `agent ctx` builds the context from them deterministically. A recipe file saves
+  the choice, so a session can be rebuilt later.
+- Exclusions are checked by provenance, not keywords: material written by a session that saw
+  excluded material is itself excluded. Where only part of a source is excluded, a filtered
+  copy is posted to a log issue and used instead. Traces that cannot be removed are recorded.
+- Every source must be permanent (a log issue, a git repo), not a scratch file.
+- The context starts with a manifest of its sources and their sizes, so omissions are
+  visible.
+
+Process:
+
+1. Describe the session you want to an agent: its purpose, what it should know, and what it
+   must not see.
+2. The agent runs `agent prepare-session`, which finds the topic's hub issue, looks for newer
+   meetings and Slack threads, applies the exclusions, and checks the budget. It stops for
+   your approval of the exclusions and the manifest, then saves the recipe.
+3. You start the session yourself with `agent ctx <recipe> | agent with-input`. Its first job
+   is to state its understanding and open questions.
+4. The session writes back what it learns to the topic's issue. When it grows too large,
+   rebuild it from the recipe, which now picks up the written-back state.
+
+Limits: sources go in raw, and nothing is compressed when they exceed the budget. An exclusion
+is an instruction to the session, not a mechanism: links in its sources could still lead it to
+excluded material.
+
 ## Tools
 
 `agent --help` documents every subcommand. Most subcommands run a script in `bin/`, which can
