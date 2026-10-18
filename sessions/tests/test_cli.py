@@ -281,6 +281,28 @@ def test_cat_at_a_point_is_the_turn_that_point_falls_in(transcribed: str, run) -
     assert "second answer" not in out
 
 
+def test_cat_upto_a_point_is_everything_through_its_turn(transcribed: str, run) -> None:
+    _, out, _ = run("cat", f"{transcribed}@u1", "--upto")
+    assert "first question" in out
+    assert "first answer" in out
+    assert "second question" not in out
+
+
+def test_cat_upto_a_later_point_keeps_the_turns_before_it(transcribed: str, run) -> None:
+    _, out, _ = run("cat", f"{transcribed}@a3", "--upto")
+    assert out.index("first answer") < out.index("second question") < out.index("second answer")
+
+
+@pytest.mark.parametrize("args", [("--upto",), ("--upto", "--last"), ("--upto", "--whole")])
+def test_cat_upto_needs_a_point_on_the_live_thread_alone(
+    transcribed: str, run, args: tuple[str, ...]
+) -> None:
+    point = "" if args == ("--upto",) else "@u1"
+    code, _, err = run("cat", f"{transcribed}{point}", *args)
+    assert code == cli.EXIT_USAGE
+    assert "--upto" in err
+
+
 def test_cat_of_one_turn_still_holds_what_was_run(transcribed: str, run) -> None:
     _, out, _ = run("cat", transcribed, "--last", "--tools")
     assert "Bash" in out
