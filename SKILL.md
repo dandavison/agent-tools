@@ -57,16 +57,20 @@ not see), the procedure is a script; do not do its steps yourself.
 
 1. Run `agent prepare-session "<the user's description, in their words>"`. It takes
    minutes. Run it in the background if your harness allows.
-2. It ends with a draft recipe and a report. Show the user the report. Do not approve anything
-   on their behalf.
-3. Pass the user's reply on verbatim: `agent prepare-session <draft path> "<their reply>"`.
-   Repeat until it prints a saved recipe path and a command.
-4. Give the user that command. Never run it, and never start the session any other way.
+2. It writes the recipe, commits it in the log repo (not pushed), and ends with a report and
+   the command that starts the session. The commit is the approval: the user reviews it with
+   git. Show the user the report and the command. Never run the command, and never start the
+   session any other way.
+3. To change a recipe, pass the user's words on verbatim:
+   `agent prepare-session <recipe path> "<their words>"`. It commits again.
 
-To change a finalized recipe, run `agent prepare-session <recipe path> "<the change>"` and
-continue from step 2. When the prepare-session prompt's rules change, offer to update
-existing recipes this way ("update to the current rules"). The user describes what they want
-in their own words; you write and run the commands.
+The script asks before one kind of action only: posting a filtered copy or a scratch file to a
+log issue, which an exclusion can need. It reports what it would post; pass the user's answer
+on as in step 3. Never approve a posting on the user's behalf.
+
+When the prepare-session prompt's rules change, offer to update existing recipes ("update to
+the current rules"). The user describes what they want in their own words; you write and run
+the commands.
 
 The session's first job is to state its understanding and open questions, and wait. If the
 user types a request after the context before sending, it states its understanding briefly

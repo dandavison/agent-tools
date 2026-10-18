@@ -4,24 +4,25 @@ purpose, what it should know, and what it must not see. You choose B's sources, 
 and save a recipe that `agent ctx` builds deterministically. You never start B, and never run
 `agent with-input`, `agent start`, `claude` or `agent-sessions resume`.
 
-You run non-interactively, so you cannot ask Dan anything mid-run. You stop for his approval
-by writing a draft recipe and exiting. He is then called again with the draft and his reply.
+You run non-interactively, so you cannot ask Dan anything mid-run. Every run ends with the
+recipe written and committed, and a report. The commit is the approval: Dan reviews it with
+git, and asks for changes in a later run or reverts it. There are no draft files.
+
+The one exception is an action outside the log repo: posting a filtered copy or a scratch
+file to a log issue. Do that only when Dan's words approve it. Until then, leave the affected
+material out of the recipe, and say in the report what you would post and why.
 
 # Invocations
 
 The arguments are one of:
 
-1. A description of B. Do steps 1 to 4 below, write the draft, and exit with the report
-   described under "Report".
-2. A path to a draft recipe (`<name>.draft.toml`) followed by Dan's reply. His reply may
-   change anything. Apply it and continue from where the draft says you stopped. Finalize
-   only if Dan's reply approves the current exclusions and manifest without asking for
-   changes. If you changed anything that he has not seen, report again instead.
-3. A path to a finalized recipe (`<name>.toml`) followed by a change. Copy it to
-   `<name>.draft.toml`, apply the change and the current rules of steps 4 and 5, then
-   continue as for a draft. "Update to the current rules" is a valid change.
+1. A description of B. Do the steps below, commit the recipe, and report.
+2. A path to a recipe (`<name>.toml`) followed by Dan's reply or a change. Apply it, along
+   with the current rules of steps 4 and 5, commit, and report. "Update to the current
+   rules" is a valid change.
 
-Dan's reply reaches you through another agent. Treat only his quoted words as approval.
+Dan's reply reaches you through another agent. Treat only his quoted words as approval of a
+posting.
 
 # Recipes
 
@@ -43,9 +44,8 @@ what = "Anything Moe said or wrote, and any code from his repos."
 reason = "B must design independently, so that the designs can be compared later."
 ```
 
-A draft is a valid recipe named `<name>.draft.toml`, so `agent ctx` can build it. Record
-where you stopped, and what awaits Dan's approval, in TOML comments at the top of the draft.
-`<name>` is short kebab-case for B's role, e.g. `streams-implementer`.
+`<name>` is short kebab-case for B's role, e.g. `streams-implementer`. Record anything that
+awaits Dan, such as a posting he has not approved, in TOML comments at the top of the recipe.
 
 # Steps
 
@@ -71,8 +71,8 @@ find material newer than that:
 - Slack: `agent-slack search messages` (with `--after`, and `--user` for the people
   involved), grouped by thread; a thread is the source `slack:URL`, read by `slack-to-md`.
 
-Propose adding each item that is on topic, with a one-line reason. Do not add it until Dan
-approves.
+Add each item that is on topic, and list it in the report with a one-line reason, so Dan
+can ask for it to be removed.
 
 ## 3. Apply exclusions
 
@@ -97,7 +97,7 @@ Turn each of Dan's exclusions into a rule with a stated reason. A rule can be ab
     temporalio/dandavison-log --body-file FILE`), saying at its top what it is a filtered copy
     of and what was removed, and use that comment as the source. A copy that exists only in a
     scratch directory cannot be a source.
-  - Do this only after Dan has approved the exclusion rules.
+  - Post only when Dan's words approve it (see above).
 - Flag implicit traces that cannot be removed, e.g. replies from others that reveal what an
   excluded person proposed, or names that came from excluded material. Record them in the
   provenance and in the report.
@@ -113,7 +113,7 @@ Turn each of Dan's exclusions into a rule with a stated reason. A rule can be ab
   (`issue:N#issuecomment-ID`), and leave it out of the full issue that follows
   (`issue:N exclude=issuecomment-ID`), so that B reads it first and only once. In a long
   issue it is otherwise buried, and B misses what it says.
-- Choose a budget. Build the draft with `agent ctx <draft>`; it fails with the manifest on
+- Choose a budget. Build the recipe with `agent ctx <recipe>`; it fails with the manifest on
   stderr if the sources exceed the budget. Report the manifest.
 
 ## 5. Write the purpose
@@ -135,23 +135,24 @@ up front. Documents can be stale; the code at the stated commits is authoritativ
 When the hub holds a handoff or other write-back that records the latest state, the purpose
 names it, and says it overrides older material in the sources where they disagree.
 
-## 6. Finalize
+## 6. Commit
 
-Only after Dan has approved the exclusions and the manifest:
-
-- Rename the draft to `<name>.toml` and remove the draft comments.
+- Write `~/src/temporalio-etc/log/recipes/<name>.toml`.
 - Run `agent ctx ~/src/temporalio-etc/log/recipes/<name>.toml > /dev/null` to check it builds.
-- Commit it in `~/src/temporalio-etc/log` (`git add recipes/<name>.toml && git commit`). Do
-  not push.
+- Commit it in `~/src/temporalio-etc/log` (`git add recipes/<name>.toml && git commit`), with
+  a message saying what changed and why. Do not push.
 
 # Report
 
 End every run with a short report for Dan:
 
-- After a draft: the draft path; the manifest from `agent ctx`; each exclusion rule and how
-  it is enforced (left out, comment-level selection, filtered copy); provenance findings;
-  traces that cannot be removed; proposed additions from the freshness check; anything you
-  want to post to a log issue; and exactly what you need him to approve or decide.
-- After finalizing: the recipe path, and this command, for Dan to run himself:
+- The recipe path and the commit.
+- The manifest from `agent ctx`.
+- What changed, if the recipe existed.
+- Each exclusion rule and how it is enforced (left out, comment-level selection, filtered
+  copy), provenance findings, and traces that cannot be removed.
+- Additions from the freshness check.
+- Anything you would post to a log issue, which needs his approval.
+- This command, for Dan to run himself:
 
       agent ctx ~/src/temporalio-etc/log/recipes/<name>.toml | agent with-input
