@@ -4,10 +4,11 @@ import inspect
 import json
 import os
 import subprocess
+from pathlib import Path
 
 import click
 
-from agent_tools.ctx import OverBudget, SourceError, build
+from agent_tools.ctx import OverBudget, SourceError, build, build_recipe
 
 SCRIPTS = {
     "with-input": """Start an interactive agent with its input pre-filled from stdin.
@@ -126,24 +127,37 @@ def start(ctx: click.Context, model: str | None, personal: bool) -> None:
 def ctx_command(
     sources: tuple[str, ...], purpose: str | None, budget: int | None
 ) -> None:
-    """Print an agent's context, built from SOURCES, as Markdown.
+    """Print an agent's context, built from SOURCES or a RECIPE.toml, as Markdown.
 
     It starts with a manifest of the sources and their token counts. Every source is
     included raw; if they exceed --budget, the manifest goes to stderr and nothing is
-    output.
+    output. Quote a source that has options.
 
     \b
-    issue:N | issue:URL | GITHUB_ISSUE_URL   gh-issue-to-md (N: log repo)
-    session:ID                               agent-sessions cat
-    slack:URL | SLACK_URL                    slack-to-md
-    meeting:QUERY                            tracecli transcript
-    path:GLOB                                matching files
+    issue:N | issue:URL | GITHUB_ISSUE_URL         the body and comments (N: log repo)
+    issue:N#issuecomment-ID                        one comment
+    "issue:N exclude=issuecomment-ID,..."          all but those comments
+    session:ID ["--whole"] ["--tools"]             agent-sessions cat (without --whole,
+                                                   only what followed the last compaction)
+    session:ID@POINT                               the session up to that point's turn
+    slack:URL | SLACK_URL                          slack-to-md
+    meeting:QUERY                                  tracecli transcript
+    path:GLOB                                      matching files
     \b
     agent ctx --purpose "implement batch cancel" --budget 80000 issue:212 \\
         session:claude:7e90a7c6 | agent with-input
+    \b
+    A recipe holds purpose, budget, sources, exclusions and provenance; relative
+    paths in it are relative to it. Recipes are in ~/src/temporalio-etc/log/recipes.
+    \b
+    agent ctx ~/src/temporalio-etc/log/recipes/batch-cancel.toml | agent with-input
     """
+    recipe = next((Path(s) for s in sources if s.endswith(".toml")), None)
+    if recipe and (len(sources) > 1 or purpose or budget):
+        raise click.UsageError("a recipe takes no other sources, --purpose or --budget")
     try:
-        click.echo(build(list(sources), purpose, budget), nl=False)
+        text = build_recipe(recipe) if recipe else build(list(sources), purpose, budget)
+        click.echo(text, nl=False)
     except OverBudget as e:
         click.echo(e.manifest, err=True, nl=False)
         raise click.ClickException("over budget; compression is not implemented") from e

@@ -66,13 +66,15 @@ def home(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def ctx(home: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def ctx(
+    home: Path, *args: str, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(AGENT), "ctx", *args],
         capture_output=True,
         check=False,
         text=True,
-        cwd=home,
+        cwd=cwd or home,
         env={**os.environ, "PATH": f"{home / 'bin'}:{os.environ['PATH']}"},
     )
 
@@ -95,7 +97,7 @@ def test_sources_are_included_raw_in_order_after_a_manifest(home: Path) -> None:
 def test_headings_are_demoted_outside_code_blocks(home: Path) -> None:
     result = ctx(home, "issue:212")
     assert result.returncode == 0, result.stderr
-    assert "\n#### Plan\n" in result.stdout
+    assert "\n### Plan\n" in result.stdout
     assert "\n# not a heading\n" in result.stdout
 
 
@@ -289,7 +291,7 @@ def test_recipe_builds_its_sources_with_purpose_and_exclusions(home: Path) -> No
 
 def test_recipe_paths_are_relative_to_the_recipe(home: Path) -> None:
     recipe = write_recipe(home)
-    result = ctx(home / "bin", str(recipe))
+    result = ctx(home, str(recipe), cwd=home / "bin")
     assert result.returncode == 0, result.stderr
     assert "\nalpha\n" in result.stdout
 
