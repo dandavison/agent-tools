@@ -85,6 +85,83 @@ agent mlx-serve
 agent choose them, checking exclusions by provenance. [`SKILL.md`](SKILL.md) gives the
 principles and the process.
 
+Dashed boxes are commands; dashed arrows return output to whoever ran them. Render with
+`d2 --layout=tala`.
+
+```d2
+direction: right
+
+prep: agent prepare-session\n(agent-run prompt script) {
+  top: 0
+  left: 0
+  style.stroke-dash: 3
+}
+
+a: Agent A\n(agent-tools skill) {
+  top: 350
+  left: 0
+}
+
+you: You {
+  top: 650
+  left: 30
+  shape: person
+  width: 120
+  height: 140
+}
+
+draft: <name>.draft.toml {
+  top: 200
+  left: 650
+  shape: document
+}
+
+recipe: recipes/<name>.toml\n(log repo, committed) {
+  top: 400
+  left: 630
+  shape: document
+}
+
+ctx: agent ctx\n(deterministic) {
+  top: 680
+  left: 660
+  style.stroke-dash: 3
+}
+
+sources: Sources {
+  top: 0
+  left: 1150
+  issues: Log issues\n(hub, INDEX.md) {shape: page; style.multiple: true}
+  sessions: Session transcripts\n(agent-sessions) {shape: page; style.multiple: true}
+  other: Slack threads,\nmeetings, files {shape: page; style.multiple: true}
+}
+
+context: Context Markdown\n(purpose, exclusions,\nmanifest, sources) {
+  top: 680
+  left: 1150
+  shape: document
+}
+
+b: Session B\n(agent with-input) {
+  top: 680
+  left: 1650
+}
+
+you -> a: 1. description of B\n5. reply (approval or changes)
+a -> prep: 2. run with description\n6. run with draft + reply
+prep -> sources: "3. read sources, check provenance,\npost filtered copies and\nscratch files to log issues"
+prep -> draft: 4a. write
+prep -> a: 4b. report: manifest,\nexclusions, questions {style.stroke-dash: 3}
+a -> you: 4c. report\n8. command {style.stroke-dash: 3}
+draft -> recipe: 7. finalize on approval
+you -> ctx: 9. agent ctx <recipe> | agent with-input
+recipe -> ctx: 10a. sources, budget,\npurpose, exclusions
+sources -> ctx: 10b. resolved raw
+ctx -> context: 11. output
+context -> b: 12. pasted as first input
+b -> sources.issues: 13. write back what it learned
+```
+
 ## Tools
 
 `agent --help` documents every subcommand. Most subcommands run a script in `bin/`, which can
