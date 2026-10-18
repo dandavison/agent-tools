@@ -59,7 +59,9 @@ def home(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def run(home: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def run(
+    home: Path, *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(SCRIPT_PATH), *args],
         capture_output=True,
@@ -67,11 +69,12 @@ def run(home: Path, *args: str) -> subprocess.CompletedProcess[str]:
         text=True,
         input="the input",
         env={
-            **os.environ,
+            **{k: v for k, v in os.environ.items() if k != "AGENT_MODEL"},
             "PATH": f"{home / 'bin'}:{os.environ['PATH']}",
             "AGENT_MODELS": str(home / "agent-models.toml"),
             "TMUX": "fake",
             "TMUX_PANE": "%0",
+            **(env or {}),
         },
     )
 
@@ -91,6 +94,12 @@ def test_personal_sets_account_env(home: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert argv(home, "claude") == ["--model", "claude-opus-5-5"]
     assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"
+
+
+def test_agent_model_env_overrides_m(home: Path) -> None:
+    result = run(home, "-m", "opus", env={"AGENT_MODEL": "luna"})
+    assert result.returncode == 0, result.stderr
+    assert argv(home, "codex") == ["--model", "gpt-6-luna"]
 
 
 def test_explicit_agent_is_not_picked(home: Path) -> None:

@@ -77,3 +77,9 @@ def test_issue_number_without_default_repo_fails(home: Path) -> None:
     result = run(home, "7", "--", "fake-agent", config=False)
     assert result.returncode != 0
     assert "default_repo" in result.stderr
+
+
+def test_model_args_go_to_agent_with_input(home: Path) -> None:
+    result = run(home, "--personal", "-m", "opus", "7")
+    assert result.returncode == 0, result.stderr
+    assert (home / "agent").read_text().splitlines() == ["--personal", "-m", "opus"]

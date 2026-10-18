@@ -64,16 +64,19 @@ def config(tmp_path: Path) -> Path:
     return path
 
 
-def run(config: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def run(
+    config: Path, *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(SCRIPT_PATH), *args],
         capture_output=True,
         check=False,
         text=True,
         env={
-            **os.environ,
+            **{k: v for k, v in os.environ.items() if k != "AGENT_MODEL"},
             "AGENT_MODELS": str(config),
             "AGENT_PRICES": str(config.parent / "openrouter-models.json"),
+            **(env or {}),
         },
     )
 
@@ -128,6 +131,12 @@ def test_unknown_name_fails(config: Path) -> None:
     assert "nope" in result.stderr
 
 
+def test_agent_model_env_overrides_name(config: Path) -> None:
+    result = run(config, "opus", env={"AGENT_MODEL": "luna"})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["name"] == "luna"
+
+
 def test_missing_price_cache_fails(config: Path) -> None:
     (config.parent / "openrouter-models.json").unlink()
     result = run(config, "luna")
@@ -145,7 +154,7 @@ def test_ctrl_c_in_fzf_exits_without_traceback(config: Path) -> None:
         check=False,
         text=True,
         env={
-            **os.environ,
+            **{k: v for k, v in os.environ.items() if k != "AGENT_MODEL"},
             "PATH": f"{config.parent}:{os.environ['PATH']}",
             "AGENT_MODELS": str(config),
             "AGENT_PRICES": str(config.parent / "openrouter-models.json"),
