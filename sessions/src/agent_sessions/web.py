@@ -34,6 +34,7 @@ from agent_sessions import (
     index,
     log,
     models,
+    network,
     query,
     resume,
 )
@@ -72,6 +73,8 @@ def handle(path: str, query_string: str = "") -> Response:
             return _issue(conn, id)
         if id := _tail(path, "/session/"):
             return _session(conn, id, params)
+        if name := _tail(path, "/network/"):
+            return _network(conn, name)
         return _error(404, "No such page.")
     finally:
         conn.close()
@@ -402,6 +405,18 @@ def _tools_button(id: str, on: bool) -> str:
         f"<a class='act toggle{' on' if on else ''}' href='{where}'"
         f" aria-label='show what was run' title='show what was run'>{CODE}</a>"
     )
+
+
+def _network(conn: sqlite3.Connection, name: str) -> Response:
+    if name.endswith(".json"):
+        shown = network.load(conn, name.removesuffix(".json"), _running())
+        if shown is None:
+            return _error(404, "No such network.")
+        return Response(orjson.dumps(shown).decode(), content_type="application/json")
+    if not (network.DIRECTORY / f"{name}.toml").is_file():
+        return _error(404, "No such network.")
+    page = (Path(__file__).parent / "network.html").read_text()
+    return Response(page.replace("{{DATA}}", f"/network/{quote(name)}.json"))
 
 
 def _resume(conn: sqlite3.Connection, id: str, remote: bool = False) -> Response:
