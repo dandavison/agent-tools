@@ -8,7 +8,7 @@ description: |
   the log repo (temporalio/dandavison-log): exfiltrate, gather-context, map-sessions.
   Triggers: "agent run", "agent ctx", "prepare a session", "set me up to",
   "start a session that", "context recipe", "log", "exfiltrate", "gather-context",
-  "map-sessions"
+  "assemble context", "context brief", "map-sessions"
 ---
 
 # agent-tools
@@ -140,13 +140,20 @@ When I ask you to gather-context on a topic, do the following:
 
 1. Exfiltrate the topic
 2. Open a new issue and write a placeholder topic summary in the body.
-3. Use Slack MCP and /agent-slack to perform exhaustive slack searches on the topic.
-4. Use Notion MCP to search Notion on the topic.
-5. If there are google docs, fetch them as markdown if you can, or if not ask me to help.
-6. Perform thorough and careful codebase research in all relevant repos, fetching latest branches and including in-progress PRs.
-7. Fetch to disk the full content of every log issue written to by the exfiltrate using gh-issue-to-md.
-8. Read all slack, notion, google doc, and exfiltrated agent session / log issue content in its
-   entirety and write a synthesis as a comment(s) in the new issue
+3. Derive search queries from the topic: key entities, technical terms, people, timeframes.
+4. Search each source below in a parallel subagent, so that your own context stays clean. Each
+   subagent reads everything relevant in full and returns what it found, with links, dates and
+   people:
+   - Slack: /agent-slack, exhaustively.
+   - Notion: Notion MCP, including `notion-query-meeting-notes`.
+   - Meetings: `tracecli` transcripts, and transcript issues in the log repo.
+   - Google docs: fetch them as markdown if you can, or if not ask me to help.
+   - Code: thorough and careful research in all relevant repos (`~/src/temporalio`,
+     `~/src/temporal-all/repos`), fetching latest branches and including in-progress PRs.
+   - Temporal docs MCP, and the `oncall` repo for Temporal Cloud operations, when relevant.
+5. Fetch to disk the full content of every log issue written to by the exfiltrate using gh-issue-to-md.
+6. Read all of it and write a synthesis as a comment(s) in the new issue: the key findings
+   first, then the evidence by source, with links.
 
 At any point, if slack/notion etc are unavailable, stop and ask me; do not skip/fallback -- this
 will result in inferior results.
