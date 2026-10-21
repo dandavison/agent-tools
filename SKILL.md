@@ -9,11 +9,15 @@ description: |
   Triggers: "agent run", "agent ctx", "prepare a session", "set me up to",
   "start a session that", "context recipe", "log", "exfiltrate", "gather-context",
   "assemble context", "context brief", "map-sessions"
+argument-hint: "exfiltrate|gather-context|map-sessions|prepare-session <topic or description>"
 ---
 
 # agent-tools
 
 `agent --help` documents every subcommand in full. Read it before using one.
+
+When invoked with arguments, the first word chooses the procedure below (exfiltrate,
+gather-context, map-sessions, prepare-session) and the rest is its topic or description.
 
 ## What you may run
 
