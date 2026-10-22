@@ -91,7 +91,7 @@ path.firstElementChild.textContent = DATA.recipe;
 setLinked("purpose", DATA.purpose.trim());
 setLinked("provenance", DATA.provenance.trim());
 set("model", DATA.model);
-set("size", `${total.toLocaleString()} of ${DATA.budget.toLocaleString()} tokens in ${DATA.sources.length} sources.`);
+set("size", `${total.toLocaleString()} tokens in ${DATA.sources.length} sources. The recipe's budget is ${DATA.budget.toLocaleString()} tokens, a limit it sets for itself; agent ctx refuses to build a context larger than that.`);
 const budget = document.getElementById("budget");
 budget.firstElementChild.style.width = `${Math.min(100, 100 * total / DATA.budget)}%`;
 budget.classList.toggle("over", total > DATA.budget);
