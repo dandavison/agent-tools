@@ -98,9 +98,8 @@ a:hover { text-decoration: underline; }
   border: 0; border-radius: 6px; padding: 2px 7px; cursor: copy;
 }
 .items { max-height: 480px; overflow: auto; padding: 6px 0; }
-.turn { display: flex; gap: 10px; padding: 1px 14px; white-space: nowrap; }
-.turn time { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; flex: none; }
-.turn span { overflow: hidden; text-overflow: ellipsis; }
+.turn { display: block; padding: 1px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.turn:hover { background: var(--card-2); text-decoration: none; }
 .compaction {
   margin: 5px 14px; display: flex; align-items: center; gap: 8px;
   color: var(--warn); font-size: 11.5px; font-weight: 500;
@@ -179,11 +178,12 @@ function Context({ c }) {
     </div>`;
 }
 
-function Item({ item }) {
+function Item({ item, session }) {
   if (item.kind === "context") return html`<${Context} c=${item} />`;
   if (item.kind === "compaction") return html`
     <div class="compaction">compacted (${item.trigger}) ${tokens(item.pre_tokens)} → ${tokens(item.post_tokens)}</div>`;
-  return html`<div class="turn" title=${item.text}><time>${clock(item.ts)}</time><span>${item.text}</span></div>`;
+  return html`<a class="turn nodrag" href=${`/session/${session}#${item.uuid}`}
+    title=${`${clock(item.ts)}: ${item.text}`}>${item.text}</a>`;
 }
 
 function SegmentNode({ data: n }) {
@@ -195,7 +195,7 @@ function SegmentNode({ data: n }) {
         <a class="title nodrag" href=${`/session/${n.session.id}`}>${n.session.title || short(n.session.id)}</a>
         <span class="meta">${day(n.started_at)}${n.context_tokens ? ` · ${tokens(n.context_tokens)}` : ""}</span>
       </header>
-      <div class="items nowheel">${n.items.map((item, i) => html`<${Item} key=${i} item=${item} />`)}</div>
+      <div class="items nowheel">${n.items.map((item, i) => html`<${Item} key=${i} item=${item} session=${n.session.id} />`)}</div>
       <${Handle} type="target" position=${Position.Top} />
       <${Handle} type="source" position=${Position.Bottom} />
     </div>`;

@@ -404,7 +404,8 @@ def _turn(id: str, t: dict, carried: Carried | None, forks: list[dict]) -> str:
     )
     source = f" data-md='{_h(carried.source)}'" if carried else ""
     return (
-        f"<li class=turn{source}><div class=meta>{_h(d['when'])}{whose}{context}"
+        f"<li class=turn id='{_h(t['uuid'])}'{source}>"
+        f"<div class=meta>{_h(d['when'])}{whose}{context}"
         f" <span class=point>{_h(d['at'])}</span><span class=doing>{doing}"
         f"<a class='act resume' href='{_resume_link(id, at=t['uuid'])}'"
         f" aria-label='resume here in a terminal' title='resume here in a terminal'>"

@@ -31,6 +31,14 @@ RECIPE = re.compile(r"# Context\n\nRecipe: (?P<path>.+?) (?:@ (?P<commit>\w+)|\(
 MANIFEST = re.compile(
     r"^\| source \| included \| tokens \|\n\|-\|-\|-\|\n(?P<rows>(?:\|.*\|\n)*)", re.M
 )
+# Messages the harness writes in the user's place.
+HARNESS = re.compile(
+    r"\s*<(task-notification|local-command-stdout|local-command-caveat|system-reminder"
+    r"|bash-input|bash-stdout)>"
+)
+COMMAND = re.compile(r"\s*<command-")
+COMMAND_NAME = re.compile(r"<command-name>(.*?)</command-name>", re.S)
+COMMAND_ARGS = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 PASTE_MARK = re.compile(r"</?pasted_content[^>]*>")
 # A turn is shown on one line, so more than a line's worth is never read.
 LINE = 300
@@ -66,6 +74,10 @@ def forest(conn: sqlite3.Connection, selected: set[str]) -> dict:
 
 def said(uuid: str, ts: int | None, text: str) -> list[dict]:
     """A user turn: the context it pasted, if it pasted one, and what was typed."""
+    if HARNESS.match(text):
+        return []
+    if COMMAND.match(text):
+        text = _command(text)
     pasted = CONTEXT.match(text)
     turn = {
         "kind": "turn",
@@ -266,6 +278,12 @@ def _url(uri: str) -> str | None:
     if uri.startswith("slack:"):
         return uri.removeprefix("slack:")
     return uri if SLACK.match(uri) else None
+
+
+def _command(text: str) -> str:
+    """`/name args`, which is what was typed, from the record Claude makes of it."""
+    name, args = COMMAND_NAME.search(text), COMMAND_ARGS.search(text)
+    return f"{name[1] if name else ''} {args[1] if args else ''}"
 
 
 def _line(text: str) -> str:
