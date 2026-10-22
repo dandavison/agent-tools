@@ -94,6 +94,12 @@ def test_sources_are_included_raw_in_order_after_a_manifest(home: Path) -> None:
     assert session < out.index("### agent-sessions cat 7e90\n")
 
 
+def test_an_issue_says_which_repo_it_is_from(home: Path) -> None:
+    result = ctx(home, "issue:212")
+    assert result.returncode == 0, result.stderr
+    assert f"number: 212\nurl: {ISSUE_URL}\n" in result.stdout
+
+
 def test_headings_are_demoted_outside_code_blocks(home: Path) -> None:
     result = ctx(home, "issue:212")
     assert result.returncode == 0, result.stderr
