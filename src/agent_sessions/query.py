@@ -45,10 +45,9 @@ class Filters:
     def where(self) -> tuple[str, list[object]]:
         clauses, values = [], []
         if self.project:
-            # `-p temporal` should find its tasks too, since a closed one attributes
-            # to the bare repo while a live one keeps its branch.
-            clauses.append("(project = ? OR project LIKE ?)")
-            values += [self.project, f"{self.project}:%"]
+            projects = [_project(p) for p in self.project.split()]
+            clauses.append(f"({' OR '.join(c for c, _ in projects)})")
+            values += [v for _, vs in projects for v in vs]
         if self.agent:
             clauses.append("agent = ?")
             values.append(self.agent)
@@ -59,6 +58,17 @@ class Filters:
             clauses.append("context_tokens >= ?")
             values.append(parse_count(self.min_context))
         return (" AND ".join(clauses) or "1", values)
+
+
+def _project(pattern: str) -> tuple[str, list[object]]:
+    """A glob, or a name, which takes in its tasks.
+
+    `-p temporal` should find its tasks too, since a closed one attributes to
+    the bare repo while a live one keeps its branch.
+    """
+    if any(c in pattern for c in "*?["):
+        return "project GLOB ?", [pattern]
+    return "(project = ? OR project LIKE ?)", [pattern, f"{pattern}:%"]
 
 
 def parse_duration(text: str) -> int:

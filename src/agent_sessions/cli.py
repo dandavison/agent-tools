@@ -152,7 +152,12 @@ def status(fmt: str | None, as_json: bool, quiet: bool) -> None:
 def filter_options(f):
     for option in reversed(
         [
-            click.option("-p", "--project", help="Only this wormhole project, tasks included."),
+            click.option(
+                "-p",
+                "--project",
+                help="Only these wormhole projects: space-separated globs; a name with no"
+                " wildcard includes its tasks.",
+            ),
             click.option(
                 "--agent", type=click.Choice(sorted(index.SOURCES)), help="Only this agent."
             ),
