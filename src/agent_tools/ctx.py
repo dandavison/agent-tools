@@ -52,14 +52,16 @@ class Exclusion:
 
 @dataclass
 class Recipe:
-    """A saved context. `provenance` records how sources were checked; it is for
-    whoever maintains the recipe, and is not part of the context."""
+    """A saved context. `provenance` records how sources were checked, and
+    `related_sessions` are existing sessions on the topic to compare with; both are for
+    whoever maintains the recipe, and are not part of the context."""
 
     purpose: str
     budget: int
     provenance: str
     sources: list[str]
     exclusions: tuple[Exclusion, ...]
+    related_sessions: list[str]
 
 
 def build(
@@ -95,7 +97,11 @@ def build_recipe(path: Path) -> str:
 def load_recipe(path: Path) -> Recipe:
     try:
         data = tomllib.loads(path.read_text())
-        check_keys(data, {"purpose", "budget", "provenance", "sources", "exclusions"})
+        check_keys(
+            data,
+            {"purpose", "budget", "provenance", "sources", "exclusions"},
+            frozenset({"related_sessions"}),
+        )
         for source in data["sources"]:
             check_keys(source, {"uri"}, frozenset({"provenance"}))
         for exclusion in data["exclusions"]:
@@ -106,6 +112,7 @@ def load_recipe(path: Path) -> Recipe:
             provenance=data["provenance"],
             sources=[source["uri"] for source in data["sources"]],
             exclusions=tuple(Exclusion(**e) for e in data["exclusions"]),
+            related_sessions=data.get("related_sessions", []),
         )
     except (OSError, tomllib.TOMLDecodeError, ValueError, TypeError) as e:
         raise SourceError(f"{path}: {e}") from e

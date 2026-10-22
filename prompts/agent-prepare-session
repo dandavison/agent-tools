@@ -34,6 +34,7 @@ purpose = """B's first instruction."""
 budget = 300000
 provenance = """How the sources were chosen and checked, and traces that could not be
 removed. For whoever maintains the recipe; B does not see it."""
+related_sessions = ["claude:4bc15e93-e2e8-496a-8648-12c5dc65e025"]
 
 [[sources]]
 uri = "issue:412"
@@ -43,6 +44,10 @@ provenance = "Optional, per source."
 what = "Anything Moe said or wrote, and any code from his repos."
 reason = "B must design independently, so that the designs can be compared later."
 ```
+
+`related_sessions` lists the full ids of existing sessions on B's topic (step 2), best
+first. B does not see them; `agent quiz` asks one of them and B the same questions, so
+that Dan can compare them.
 
 `<name>` is short kebab-case for B's role, e.g. `streams-implementer`. Record anything that
 awaits Dan, such as a posting he has not approved, in TOML comments at the top of the recipe.
@@ -79,7 +84,7 @@ find material newer than that:
 Add each item that is on topic, and list it in the report with a one-line reason, so Dan
 can ask for it to be removed. A session that has not written back may hold knowledge that
 no source has; do not ask it anything, but list it in the report so Dan can exfiltrate it
-and run you again.
+and run you again. Put the sessions on topic in `related_sessions`.
 
 ## 3. Apply exclusions
 
@@ -159,8 +164,8 @@ End every run with a short report for Dan:
 - Each exclusion rule and how it is enforced (left out, comment-level selection, filtered
   copy), provenance findings, and traces that cannot be removed.
 - Additions from the freshness check.
-- Sessions on the topic: id, project, date, context size, title, and whether each has
-  written back what it learned, with the issues it wrote to.
+- Sessions on the topic (as in `related_sessions`): id, project, date, context size, title,
+  and whether each has written back what it learned, with the issues it wrote to.
 - Anything you would post to a log issue, which needs his approval.
 - This command, for Dan to run himself:
 

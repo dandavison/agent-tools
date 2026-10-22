@@ -10,6 +10,7 @@ import click
 
 from agent_tools.ctx import OverBudget, SourceError, build, build_recipe
 from agent_tools.overview import write_overview
+from agent_tools.quiz import quiz
 
 SCRIPTS = {
     "with-input": """Start an interactive agent with its input pre-filled from stdin.
@@ -162,7 +163,8 @@ def ctx_command(
     agent ctx --purpose "implement batch cancel" --budget 80000 issue:212 \\
         session:claude:7e90a7c6 | agent with-input
     \b
-    A recipe holds purpose, budget, sources, exclusions and provenance; relative
+    A recipe holds purpose, budget, sources, exclusions, provenance and optionally
+    related_sessions (for agent quiz); relative
     paths in it are relative to it. Recipes are in ~/src/temporalio-etc/log/recipes.
     \b
     agent ctx ~/src/temporalio-etc/log/recipes/batch-cancel.toml | agent with-input
@@ -204,6 +206,30 @@ def overview_command(recipe: Path, model: str) -> None:
         raise click.ClickException(str(e)) from e
     click.echo(page)
     subprocess.run(["open", str(page)], check=True)
+
+
+@cli.command("quiz")
+@click.argument("recipe", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "-m",
+    "model",
+    help="Model for both sessions, from ~/.config/agent-models.toml.",
+    shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
+)
+@click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
+def quiz_command(recipe: Path, model: str | None, personal: bool) -> None:
+    """Ask a session prepared from RECIPE.toml and an existing session the same
+    questions, and show their answers one after the other.
+
+    \b
+    agent quiz -m opus ~/src/temporalio-etc/log/recipes/batch-cancel.toml
+    The existing session is chosen with fzf from the recipe's related_sessions, and
+    forked, so it is not changed. Each answer shows what its turn cost.
+    """
+    try:
+        quiz(recipe.absolute(), lambda other: pick_model(model, personal or other))
+    except SourceError as e:
+        raise click.ClickException(str(e)) from e
 
 
 def script_command(name: str, help: str) -> click.Command:

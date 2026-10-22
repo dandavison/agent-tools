@@ -5,7 +5,8 @@
 #
 # Prepare a recipe for a session described in plain language (agent-prepare-session) and
 # show its report. Enter then starts the session with the recipe's context (agent-with-input);
-# typed changes go to agent-prepare-session, which commits a revised recipe.
+# q quizzes it against an existing session (agent quiz); typed changes go to
+# agent-prepare-session, which commits a revised recipe.
 
 set -euo pipefail
 
@@ -47,10 +48,13 @@ else
     prepare "$1"
 fi
 
-while read -r -p "Enter starts the session; or type changes: " reply; do
+while read -r -p "Enter starts the session; q quizzes it against an existing one; or type changes: " reply; do
     if [[ -z "$reply" ]]; then
         agent ctx "$recipe" | agent-with-input ${with_input_args[@]+"${with_input_args[@]}"}
         exit
+    elif [[ "$reply" == q ]]; then
+        agent quiz ${with_input_args[@]+"${with_input_args[@]}"} "$recipe" || true
+        continue
     fi
     prepare "$recipe" "$reply"
 done
