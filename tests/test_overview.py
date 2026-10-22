@@ -135,7 +135,7 @@ LOG = "https://github.com/temporalio/dandavison-log/issues"
 )
 def test_sources_link_to_where_they_live(uri: str, url: str | None) -> None:
     base = Path("/base")
-    expected = url.replace("BASE", "base") if url else None
+    expected = url.replace("BASE", "/base") if url else None
     assert source_url(uri, base) == expected
 
 
