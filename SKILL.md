@@ -291,11 +291,9 @@ Commands:
     agent run [--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script
 
   sessions
-    Find, index and resume past sessions (agent-sessions).
+    Find and resume the sessions you have had with coding agents.
 
-    agent sessions search "conversation history"
-    agent sessions show claude:7e90a7c6 --turns
-    `agent sessions --help` lists its commands.
+    `sync` brings the index up to date with the transcript files on disk; every other command reads.
 
   start
     Start an interactive session, passing other arguments to the model's CLI.

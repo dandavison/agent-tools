@@ -9,7 +9,7 @@ from contextlib import suppress
 from dataclasses import asdict
 from pathlib import Path
 from threading import Thread
-from typing import Any
+from typing import Any, cast
 
 import click
 import segno
@@ -72,7 +72,27 @@ def renderer(fmt: str | None, as_json: bool, quiet: bool) -> Renderer:
     return Renderer(Format(fmt) if fmt else render.detect())
 
 
+class Main(click.Group):
+    """Keeps the exit-code contract wherever it is mounted, e.g. as `agent sessions`."""
+
+    def invoke(self, ctx: click.Context) -> Any:
+        try:
+            return super().invoke(ctx)
+        except NoResults:
+            ctx.exit(EXIT_NO_RESULTS)
+        except (click.UsageError, ValueError) as e:
+            message = e.format_message() if isinstance(e, click.UsageError) else str(e)
+            print(f"Error: {message}", file=sys.stderr)
+            ctx.exit(EXIT_USAGE)
+        except click.exceptions.Abort:
+            ctx.exit(EXIT_USAGE)
+        except (NotInstalled, WormholeUnavailable) as e:
+            print(f"Error: {e}", file=sys.stderr)
+            ctx.exit(EXIT_USAGE)
+
+
 @click.group(
+    cls=Main,
     context_settings={"help_option_names": ["-h", "--help"]},
     epilog="""\b
 Examples
@@ -803,21 +823,11 @@ def _ago(when: int | None) -> str:
 
 
 def run(argv: list[str] | None = None) -> int:
-    """The entry point, and the whole of the exit-code contract."""
+    """The agent-sessions entry point."""
     try:
-        main.main(args=argv, standalone_mode=False)
-    except NoResults:
-        return EXIT_NO_RESULTS
-    except (click.UsageError, ValueError) as e:
-        message = e.format_message() if isinstance(e, click.UsageError) else str(e)
-        print(f"Error: {message}", file=sys.stderr)
-        return EXIT_USAGE
-    except click.exceptions.Abort:
-        return EXIT_USAGE
-    except (NotInstalled, WormholeUnavailable) as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return EXIT_USAGE
-    return 0
+        main.main(args=argv)
+    except SystemExit as e:
+        return cast(int, e.code)
 
 
 if __name__ == "__main__":

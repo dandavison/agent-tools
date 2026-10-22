@@ -71,14 +71,6 @@ class Script(click.Command):
         return []
 
 
-class Passthrough(click.Command):
-    """Passes every argument on untouched, --help included."""
-
-    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        ctx.args = args
-        return []
-
-
 class Agent(click.Group):
     """Lists every subcommand's full help, so that one --help documents the whole tool.
 
@@ -245,17 +237,7 @@ def quiz_command(recipe: Path, model: str | None, personal: bool) -> None:
         raise click.ClickException(str(e)) from e
 
 
-@cli.command("sessions", cls=Passthrough)
-@click.pass_context
-def sessions_command(ctx: click.Context) -> None:
-    """Find, index and resume past sessions (agent-sessions).
-
-    \b
-    agent sessions search "conversation history"
-    agent sessions show claude:7e90a7c6 --turns
-    `agent sessions --help` lists its commands.
-    """
-    raise SystemExit(agent_sessions.cli.run(ctx.args))
+cli.add_command(agent_sessions.cli.main, "sessions")
 
 
 def script_command(name: str, help: str) -> click.Command:
