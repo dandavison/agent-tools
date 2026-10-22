@@ -1,11 +1,13 @@
 """Sessions that forked from one another, each with the context it was started from."""
 
 from pathlib import Path
+from urllib.parse import urlencode
 
 import orjson
 import pytest
 
 from agent_sessions import db, genealogy, index, web
+from agent_sessions.contexts import ContextSource
 from agent_sessions.models import Compaction, Edge, Node, Session
 
 PARENT = "claude:11111111-0000-0000-0000-000000000000"
@@ -147,9 +149,15 @@ def test_the_context_a_session_was_started_from_is_one_block_of_its_sources(conn
                 "uri": "issue:412 exclude=issuecomment-6236552071",
                 "tokens": 21308,
                 "url": "https://github.com/temporalio/dandavison-log/issues/412",
+                "list": "/?source=issue%3A412",
             },
-            {"uri": SLACK, "tokens": 900, "url": SLACK},
-            {"uri": "path:notes.md", "tokens": 40, "url": None},
+            {
+                "uri": SLACK,
+                "tokens": 900,
+                "url": SLACK,
+                "list": f"/?{urlencode({'source': SLACK})}",
+            },
+            {"uri": "path:notes.md", "tokens": 40, "url": None, "list": "/?source=path%3Anotes.md"},
         ],
     }
     assert typed == {"kind": "turn", "uuid": "u1", "ts": 100, "text": "Start with the API."}
@@ -383,3 +391,38 @@ def test_a_lineage_says_how_many_of_its_sessions_matched(listed) -> None:
     body = web.handle("/", "q=three").body
     assert f"href='/genealogy/{CHILD}'" in body
     assert "2 sessions, 1 matched" in body
+
+
+def test_a_context_source_says_which_list_finds_the_sessions_built_from_it(conn) -> None:
+    built = genealogy.of(conn, PARENT)["nodes"][0]["items"][0]
+    assert built["sources"][0]["list"] == "/?source=issue%3A412"
+
+
+def test_the_list_is_narrowed_to_sessions_built_from_a_source(listed) -> None:
+    db.write_context_sources(listed, [ContextSource(UNRELATED, "issue:412", None)])
+    listed.commit()
+    body = web.handle("/", "source=issue%3A412").body
+    assert f"href='/session/{UNRELATED}'" in body
+    assert f"/genealogy/{CHILD}'" not in body
+    assert "name=source" in body
+
+
+def test_the_sources_chosen_are_chips_each_removable(listed) -> None:
+    body = web.handle("/", "source=issue%3A412&source=recipe%3Ax").body
+    assert "/?source=recipe%3Ax'" in body
+    assert "/?source=issue%3A412'" in body
+
+
+def test_the_sources_chosen_can_be_all_or_any(listed) -> None:
+    body = web.handle("/", "source=issue%3A412&source=recipe%3Ax").body
+    assert "source=issue%3A412+recipe%3Ax&amp;sources=any'>any</a>" in body
+    body = web.handle("/", "source=issue%3A412&source=recipe%3Ax&sources=any").body
+    assert "source=issue%3A412+recipe%3Ax'>all</a>" in body
+
+
+def test_the_sources_known_are_offered(listed) -> None:
+    db.write_context_sources(listed, [ContextSource(UNRELATED, "issue:412 exclude=x", "r")])
+    listed.commit()
+    body = web.handle("/").body
+    assert "<option value='issue:412'>" in body
+    assert "<option value='recipe:r'>" in body

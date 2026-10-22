@@ -272,3 +272,21 @@ def test_sessions_of_two_accounts_are_indexed_together(
 
     ids = {row["id"] for row in conn.execute("SELECT id FROM session")}
     assert ids == {f"claude:{SESSION}", f"claude-personal:{SESSION}"}
+
+
+def test_sync_records_the_context_sources_a_session_was_started_from(
+    projects: Path, tmp_path: Path
+) -> None:
+    context = (
+        '<pasted_content id="ab12">\n# Context\n\n'
+        "Recipe: /r/moe-code-expert.toml @ 05948a1\n\n"
+        "| source | included | tokens |\n|-|-|-|\n| issue:413 exclude=issuecomment-1 | raw | 9 |\n"
+        '\n</pasted_content id="ab12">'
+    )
+    write(projects, conversation(context))
+    conn = db.connect(tmp_path / "index.db")
+    index.sync(conn)
+    rows = conn.execute("SELECT session_id, uri, recipe FROM context_source").fetchall()
+    assert [tuple(r) for r in rows] == [
+        (f"claude:{SESSION}", "issue:413 exclude=issuecomment-1", "moe-code-expert")
+    ]

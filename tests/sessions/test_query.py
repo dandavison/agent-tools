@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from agent_sessions import db, query
+from agent_sessions.contexts import ContextSource
 from agent_sessions.models import Node, Session
 
 NOW = int(time.time())
@@ -107,6 +108,56 @@ def test_project_filter_takes_globs(conn) -> None:
     assert ids(found) == {"claude:b"}
     found = query.recent(conn, query.Filters(project="temp* worm?ole"), "recent", 10)
     assert ids(found) == {"claude:a", "claude:b", "claude:c", "claude:d"}
+
+
+def used(conn) -> None:
+    three(conn)
+    db.write_context_sources(
+        conn,
+        [
+            ContextSource("claude:a", "issue:413 exclude=issuecomment-1", "moe-code-expert"),
+            ContextSource("claude:b", "issue:4130", None),
+            ContextSource("claude:c", "https://github.com/temporalio/temporal/issues/413", None),
+        ],
+    )
+    conn.commit()
+
+
+@pytest.mark.parametrize(
+    "source", ["issue:413", "https://github.com/temporalio/dandavison-log/issues/413"]
+)
+def test_source_filter_matches_the_issue_whichever_part_was_used(conn, source: str) -> None:
+    used(conn)
+    assert ids(query.recent(conn, query.Filters(source=source), "recent", 10)) == {"claude:a"}
+
+
+def test_several_sources_must_all_have_been_used(conn) -> None:
+    used(conn)
+    both = query.Filters(source="issue:413 recipe:moe-code-expert")
+    assert ids(query.recent(conn, both, "recent", 10)) == {"claude:a"}
+    assert query.recent(conn, query.Filters(source="issue:413 issue:4130"), "recent", 10) == []
+
+
+def test_several_sources_can_be_any_of_them(conn) -> None:
+    used(conn)
+    either = query.Filters(source="issue:413 issue:4130", any_source=True)
+    assert ids(query.recent(conn, either, "recent", 10)) == {"claude:a", "claude:b"}
+
+
+def test_a_recipe_is_a_source_by_its_name(conn) -> None:
+    used(conn)
+    found = query.recent(conn, query.Filters(source="recipe:moe-code-expert"), "recent", 10)
+    assert ids(found) == {"claude:a"}
+
+
+def test_the_sources_known_are_offered_with_the_recipes(conn) -> None:
+    used(conn)
+    assert query.sources_used(conn) == [
+        "https://github.com/temporalio/temporal/issues/413",
+        "issue:413",
+        "issue:4130",
+        "recipe:moe-code-expert",
+    ]
 
 
 def test_since_filter(conn) -> None:

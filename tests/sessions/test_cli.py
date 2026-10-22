@@ -7,6 +7,7 @@ import pytest
 from conftest import SESSION, assistant, last_prompt, text_block, tool_result, tool_use, user
 
 from agent_sessions import cli, db, query
+from agent_sessions.contexts import ContextSource
 from agent_sessions.models import Node, Session
 from agent_sessions.resume import Resumed
 from agent_sessions.sources import claude
@@ -345,3 +346,44 @@ def test_showing_turns_names_a_command_that_takes_one(transcribed: str, run) -> 
     code, out, _ = run(*suggested)
     assert code == 0
     assert "second question" in out
+
+
+@pytest.fixture
+def sourced(indexed: Path) -> Path:
+    conn = db.connect()
+    db.write_context_sources(
+        conn, [ContextSource(ID, "issue:413#issuecomment-1", "moe-code-expert")]
+    )
+    conn.commit()
+    return indexed
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("ls", "--source", "issue:413"),
+        ("search", "relocating", "--source", "issue:413"),
+        ("ls", "--source", "issue:999", "--source", "issue:413", "--any-source"),
+        ("ls", "--recipe", "moe-code-expert", "--source", "issue:413"),
+    ],
+)
+def test_sessions_are_found_by_what_their_context_was_built_from(
+    sourced: Path, run, args: tuple[str, ...]
+) -> None:
+    code, out, _ = run(*args)
+    assert (code, ID in out) == (0, True)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("ls", "--source", "issue:999"),
+        ("ls", "--source", "issue:999", "--source", "issue:413"),
+        ("ls", "--recipe", "streams-implementer"),
+    ],
+)
+def test_a_session_not_built_from_a_source_is_not_found_by_it(
+    sourced: Path, run, args: tuple[str, ...]
+) -> None:
+    _, out, _ = run(*args)
+    assert ID not in out
