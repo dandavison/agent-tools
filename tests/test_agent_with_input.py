@@ -96,6 +96,17 @@ def test_personal_sets_account_env(home: Path) -> None:
     assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"
 
 
+def test_name_names_the_claude_session(home: Path) -> None:
+    result = run(home, "-m", "opus", "--name", "meeting-prep")
+    assert result.returncode == 0, result.stderr
+    assert argv(home, "claude") == [
+        "--model",
+        "claude-opus-5-5",
+        "--name",
+        "meeting-prep",
+    ]
+
+
 def test_agent_model_env_overrides_m(home: Path) -> None:
     result = run(home, "-m", "opus", env={"AGENT_MODEL": "luna"})
     assert result.returncode == 0, result.stderr

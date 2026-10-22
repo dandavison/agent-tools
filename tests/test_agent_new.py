@@ -110,7 +110,9 @@ def test_no_committed_recipe_fails_without_starting(home: Path) -> None:
 def test_model_options_go_to_with_input(home: Path) -> None:
     result = run(home, "--personal", "-m", "opus", recipe(home))
     assert result.returncode == 0, result.stderr
-    assert (home / "with-input.argv").read_text() == "--personal\n-m\nopus\n"
+    assert (home / "with-input.argv").read_text() == (
+        "--personal\n-m\nopus\n--name\nmeeting\n"
+    )
 
 
 def test_eof_at_prompt_exits_without_starting(home: Path) -> None:

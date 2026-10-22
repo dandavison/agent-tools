@@ -289,6 +289,32 @@ def test_recipe_builds_its_sources_with_purpose_and_exclusions(home: Path) -> No
     assert "\n### agent-sessions cat 7e90 --whole\n" in out
 
 
+def test_recipe_context_says_which_recipe_and_commit_built_it(home: Path) -> None:
+    """So a session's transcript records where its context came from."""
+    recipe = write_recipe(home)
+    git = ["git", "-C", str(recipe.parent), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "."], check=True)
+    subprocess.run([*git, "commit", "-qm", "recipe"], check=True)
+    commit = subprocess.run(
+        [*git, "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    result = ctx(home, str(recipe))
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith(f"# Context\n\nRecipe: {recipe} @ {commit}\n\n")
+
+
+def test_an_uncommitted_recipe_says_so(home: Path) -> None:
+    recipe = write_recipe(home)
+    result = ctx(home, str(recipe))
+    assert result.stdout.startswith(
+        f"# Context\n\nRecipe: {recipe} (not committed)\n\n"
+    )
+
+
 def test_recipe_paths_are_relative_to_the_recipe(home: Path) -> None:
     recipe = write_recipe(home)
     result = ctx(home, str(recipe), cwd=home / "bin")
