@@ -14,6 +14,7 @@ executable prompt scripts, and from the zsh prompt. Specific to my setup.
 | Keep what a session learned | Tell it "exfiltrate to the topic's issue" before closing it |
 | Replace a session whose context is nearly full | Have it exfiltrate, quit, then `agent new RECIPE.toml` |
 | Gather everything on a topic from Slack, Notion, meetings and code | Tell an agent "gather-context on TOPIC" |
+| See what a recipe's context contains | `agent overview RECIPE.toml` |
 | Find a past session | `agent-sessions search "QUERY"`, then `agent-sessions show ID --turns` |
 
 Never resume a session: start a new one from its recipe, which picks up what was written back.
@@ -192,6 +193,7 @@ also be run directly as `agent-<subcommand>`.
 | `agent ctx` | Build an agent's context from sources or a recipe within a token budget. No compression yet. |
 | `agent new` | Prepare a session from a description or recipe, and start it on Enter. |
 | `agent prepare-session` | The prompt script that prepares a recipe. |
+| `agent overview` | Open a browser page summarising a recipe's sources, sizes and exclusions. |
 | `agent with-input` | Start an interactive agent with its input pre-filled from stdin. |
 | `agent from-issues` | Same, from GitHub issues. Reads `~/.config/agent-from-issues.toml`. |
 | `agent mlx-serve` | Serve a local MLX model over an OpenAI-compatible API. |

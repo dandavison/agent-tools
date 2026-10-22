@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Context overview</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #f6f7f8; --surface: #ffffff; --fg: #1d2329; --muted: #5d6873; --line: #dde2e7;
+  --accent: #1f6f8b; --accent-soft: #e3f0f5; --open: #a5590f; --open-soft: #fbecd9;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #13171b; --surface: #1b2127; --fg: #e3e8ec; --muted: #9aa6b1; --line: #2c343c;
+  --accent: #6cb8d4; --accent-soft: #1d3440; --open: #e8a35c; --open-soft: #3a2a18; color-scheme: dark } }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); margin: 0; }
+main { max-width: 1080px; margin: 0 auto; padding: 28px 16px 64px; display: grid; gap: 32px; }
+h1 { font-size: 26px; font-weight: 600; margin: 0; }
+h2 { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+p { margin: 0; max-width: 80ch; }
+.lede { color: var(--muted); margin-top: 6px; }
+code { font-family: var(--mono); font-size: 12.5px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+.purpose { white-space: pre-wrap; }
+.budget { height: 10px; border-radius: 5px; background: var(--accent-soft); overflow: hidden; margin-top: 8px; }
+.budget div { height: 100%; background: var(--accent); }
+.budget.over div { background: var(--open); }
+.sources { display: grid; gap: 10px; }
+.source { display: grid; gap: 6px; }
+.source-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; }
+.source-head code { font-size: 13px; word-break: break-all; }
+.tokens { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.share { height: 4px; border-radius: 2px; background: var(--accent); }
+.note { font-size: 12.5px; color: var(--muted); }
+.warn { color: var(--open); }
+details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.headings { font-family: var(--mono); font-size: 12px; white-space: pre; color: var(--muted); margin: 6px 0 0; overflow-x: auto; }
+ul { margin: 0; padding-left: 18px; }
+</style>
+
+<main>
+<header>
+  <h1 id="title"></h1>
+  <p class="lede"><code id="path"></code></p>
+</header>
+<section>
+  <h2>Purpose</h2>
+  <div class="panel"><p class="purpose" id="purpose"></p></div>
+</section>
+<section>
+  <h2>Size</h2>
+  <p id="size"></p>
+  <div class="budget" id="budget"><div></div></div>
+</section>
+<section id="exclusions-section">
+  <h2>Exclusions</h2>
+  <div class="panel"><ul id="exclusions"></ul></div>
+</section>
+<section>
+  <h2>Sources</h2>
+  <p class="note" style="margin-bottom:10px">Summaries were written by <span id="model"></span> and may be wrong. Tokens are estimated as characters / 4.</p>
+  <div class="sources" id="sources"></div>
+</section>
+<section>
+  <h2>Provenance</h2>
+  <div class="panel"><p class="purpose" id="provenance"></p></div>
+</section>
+</main>
+
+<script>
+const DATA = null;
+
+const esc = s => s.replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const set = (id, text) => { document.getElementById(id).textContent = text; };
+const total = DATA.sources.reduce((n, s) => n + s.tokens, 0);
+const largest = Math.max(...DATA.sources.map(s => s.tokens));
+
+document.title = `Context: ${DATA.name}`;
+set("title", DATA.name);
+set("path", DATA.recipe);
+set("purpose", DATA.purpose.trim());
+set("provenance", DATA.provenance.trim());
+set("model", DATA.model);
+set("size", `${total.toLocaleString()} of ${DATA.budget.toLocaleString()} tokens in ${DATA.sources.length} sources.`);
+const budget = document.getElementById("budget");
+budget.firstElementChild.style.width = `${Math.min(100, 100 * total / DATA.budget)}%`;
+budget.classList.toggle("over", total > DATA.budget);
+
+if (DATA.exclusions.length) {
+  document.getElementById("exclusions").innerHTML = DATA.exclusions
+    .map(e => `<li>${esc(e.what)} <span class="note">${esc(e.reason)}</span></li>`).join("");
+} else {
+  document.getElementById("exclusions-section").remove();
+}
+
+document.getElementById("sources").innerHTML = DATA.sources.map(s => `
+  <article class="panel source">
+    <div class="source-head"><code>${esc(s.uri)}</code>
+      <span class="tokens">${s.tokens.toLocaleString()} tokens, ${(100 * s.tokens / total).toFixed(0)}%</span></div>
+    <div class="share" style="width:${100 * s.tokens / largest}%"></div>
+    <p>${esc(s.summary)}</p>
+    ${s.summarised_tokens < s.tokens ? `<p class="note warn">Summarised from the first ${s.summarised_tokens.toLocaleString()} tokens only.</p>` : ""}
+    ${s.headings.length ? `<details><summary>${s.headings.length} headings</summary><div class="headings">${s.headings.map(esc).join("\n")}</div></details>` : ""}
+  </article>`).join("");
+</script>

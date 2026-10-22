@@ -9,6 +9,7 @@ from pathlib import Path
 import click
 
 from agent_tools.ctx import OverBudget, SourceError, build, build_recipe
+from agent_tools.overview import write_overview
 
 SCRIPTS = {
     "with-input": """Start an interactive agent with its input pre-filled from stdin.
@@ -177,6 +178,32 @@ def ctx_command(
         raise click.ClickException("over budget; compression is not implemented") from e
     except SourceError as e:
         raise click.ClickException(str(e)) from e
+
+
+@cli.command("overview")
+@click.argument("recipe", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "-m",
+    "model",
+    default="haiku",
+    show_default=True,
+    help="Model that summarises each source.",
+    shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
+)
+def overview_command(recipe: Path, model: str) -> None:
+    """Open a browser page summarising a RECIPE.toml: purpose, size against the budget,
+    exclusions, provenance, and each source's tokens, headings and a short summary.
+
+    \b
+    agent overview ~/src/temporalio-etc/log/recipes/batch-cancel.toml
+    The page is written to a temporary directory; its path is printed.
+    """
+    try:
+        page = write_overview(recipe.absolute(), model)
+    except SourceError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(page)
+    subprocess.run(["open", str(page)], check=True)
 
 
 def script_command(name: str, help: str) -> click.Command:
