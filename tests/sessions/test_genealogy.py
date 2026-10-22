@@ -477,7 +477,10 @@ def test_a_slack_source_is_offered_by_its_label(listed) -> None:
     db.write_context_sources(listed, [ContextSource(UNRELATED, "x1", "context", SLACK, None)])
     listed.commit()
     body = web.handle("/").body
-    assert f"<option value='{SLACK}' label='#crew-operator-commands · {THREAD_STARTED}'>" in body
+    label = f"#crew-operator-commands · {THREAD_STARTED}"
+    assert f"<option value='{label}' data-uri='{SLACK}'>" in body
+    assert f"value='{SLACK}'" not in body, "a Slack URL means nothing to a person"
+    assert "dataset.uri" in body, "the label is sent as its URL"
 
 
 def test_a_slack_source_whose_channel_is_unknown_is_not_offered(listed) -> None:
