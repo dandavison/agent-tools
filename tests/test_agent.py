@@ -158,3 +158,20 @@ def test_m_completes_model_names(home: Path, words: str) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == ["plain,opus", "plain,luna"]
+
+
+def test_sessions_runs_agent_sessions_with_its_help(home: Path) -> None:
+    result = run(home, "sessions", "--help")
+    assert result.returncode == 0, result.stderr
+    assert "Find and resume the sessions you have had with coding agents." in result.stdout
+
+
+def test_sessions_keeps_agent_sessions_exit_codes(home: Path) -> None:
+    result = run(home, "sessions", "search")
+    assert result.returncode == 2
+    assert "QUERY" in result.stderr
+
+
+def test_help_lists_sessions(home: Path) -> None:
+    result = run(home, "--help")
+    assert "\n  sessions\n" in result.stdout
