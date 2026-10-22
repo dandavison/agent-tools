@@ -233,3 +233,62 @@ def test_an_unknown_session_has_no_genealogy(conn) -> None:
 
 def test_a_session_page_links_to_its_genealogy(conn) -> None:
     assert f"/genealogy/{CHILD}" in web.handle(f"/session/{CHILD}").body
+
+
+SIBLING = "claude:44444444-0000-0000-0000-000000000000"
+
+
+def sibling(conn) -> None:
+    """A second fork of the parent, so the parent is what joins the two forks."""
+    session(conn, SIBLING, "streams-sibling", 100, "a5")
+    db.write_nodes(conn, thread(SIBLING, *SHARED, ("u5", "user", "five"), ("a5", "assistant", "")))
+    db.write_edges(conn, [Edge(child=SIBLING, parent=PARENT, kind="fork", at_uuid="a2")])
+    conn.commit()
+
+
+def shown(found: dict) -> list[tuple[str, list[str], bool]]:
+    return [(n["session"]["id"], turns(n), n["inside"]) for n in found["nodes"]]
+
+
+def test_a_set_of_sessions_is_a_forest_of_their_lineages_and_singletons(conn) -> None:
+    assert shown(genealogy.forest(conn, {CHILD, UNRELATED})) == [
+        (CHILD, ["Start with the API.", "Now the implementation.", "four"], True),
+        (UNRELATED, ["elsewhere"], True),
+    ]
+
+
+def test_a_session_outside_the_set_is_shown_only_to_join_sessions_in_it(conn) -> None:
+    sibling(conn)
+    root, ours, child, sib = shown(genealogy.forest(conn, {CHILD, SIBLING}))
+    assert root == (PARENT, ["Start with the API.", "Now the implementation."], True)
+    assert ours == (PARENT, ["three"], False)
+    assert (child, sib) == ((CHILD, ["four"], True), (SIBLING, ["five"], True))
+
+
+def test_each_node_says_which_tree_it_is_in(conn) -> None:
+    found = genealogy.forest(conn, {PARENT, CHILD, UNRELATED})["nodes"]
+    root = found[0]["id"]
+    assert [n["tree"] for n in found] == [root, root, root, found[-1]["id"]]
+
+
+def test_the_genealogy_of_a_search_is_of_the_sessions_it_finds(conn) -> None:
+    conn.execute("UPDATE session SET project = 'streams:a' WHERE id IN (?, ?)", (CHILD, UNRELATED))
+    conn.commit()
+    response = web.handle("/genealogy.json", "q=&project=streams:*")
+    assert response.status == 200
+    assert {n["session"]["id"] for n in orjson.loads(response.body)["nodes"]} == {CHILD, UNRELATED}
+    page = web.handle("/genealogy", "q=&project=streams%3A%2A")
+    assert page.status == 200
+    assert "/genealogy.json?project=streams%3A%2A" in page.body
+
+
+def test_the_genealogy_of_a_malformed_search_is_an_error(conn) -> None:
+    assert web.handle("/genealogy.json", "since=2y").status == 400
+
+
+def test_a_list_of_sessions_links_to_their_genealogy(conn) -> None:
+    conn.execute("UPDATE session SET project = 'streams:a' WHERE id = ?", (CHILD,))
+    db.reindex_fts(conn)
+    conn.commit()
+    body = web.handle("/", "q=four&project=streams%3A%2A").body
+    assert "/genealogy?q=four&amp;project=streams%3A%2A" in body

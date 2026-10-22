@@ -94,6 +94,21 @@ def test_project_filter_is_not_a_prefix_match(conn) -> None:
     assert query.recent(conn, query.Filters(project="temporal"), "recent", 10) == []
 
 
+def test_project_filter_takes_several_space_separated(conn) -> None:
+    three(conn)
+    found = query.recent(conn, query.Filters(project="wormhole temporal:dan/x"), "recent", 10)
+    assert ids(found) == {"claude:a", "claude:b"}
+
+
+def test_project_filter_takes_globs(conn) -> None:
+    three(conn)
+    populate(conn, [session("claude:d", project="temporalio")], [])
+    found = query.recent(conn, query.Filters(project="temporal:*"), "recent", 10)
+    assert ids(found) == {"claude:b"}
+    found = query.recent(conn, query.Filters(project="temp* worm?ole"), "recent", 10)
+    assert ids(found) == {"claude:a", "claude:b", "claude:c", "claude:d"}
+
+
 def test_since_filter(conn) -> None:
     three(conn)
     found = query.recent(conn, query.Filters(since="2w"), "recent", 10)
