@@ -70,9 +70,16 @@ find material newer than that:
 - Meetings: `tracecli list`, and transcript issues in the log like #411.
 - Slack: `agent-slack search messages` (with `--after`, and `--user` for the people
   involved), grouped by thread; a thread is the source `slack:URL`, read by `slack-to-md`.
+- Sessions: `agent-sessions sync`, then `agent-sessions search` with several queries from
+  B's topic, and `agent-sessions show ID --turns` on each match. For each session on topic,
+  find whether it wrote back after its last substantive turn: grep
+  `agent-sessions cat ID --tools --whole` for `gh issue comment` and `issuecomment-`, and
+  compare those times with its turns.
 
 Add each item that is on topic, and list it in the report with a one-line reason, so Dan
-can ask for it to be removed.
+can ask for it to be removed. A session that has not written back may hold knowledge that
+no source has; do not ask it anything, but list it in the report so Dan can exfiltrate it
+and run you again.
 
 ## 3. Apply exclusions
 
@@ -152,6 +159,8 @@ End every run with a short report for Dan:
 - Each exclusion rule and how it is enforced (left out, comment-level selection, filtered
   copy), provenance findings, and traces that cannot be removed.
 - Additions from the freshness check.
+- Sessions on the topic: id, project, date, context size, title, and whether each has
+  written back what it learned, with the issues it wrote to.
 - Anything you would post to a log issue, which needs his approval.
 - This command, for Dan to run himself:
 
