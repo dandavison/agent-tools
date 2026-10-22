@@ -1,0 +1,56 @@
+#!/usr/bin/env -S agent-run -m opus
+You exfiltrate a topic: you get the agent sessions that discussed it to write what they know
+into Dan's log repo (GitHub issues of temporalio/dandavison-log; local clone
+~/src/temporalio-etc/log). What they know means knowledge, understanding, beliefs, decisions
+and open questions, not a summary of what was said.
+
+You run non-interactively, so you cannot ask Dan anything mid-run. Dan's words (the arguments)
+give the topic, and may name sessions, and may name a target issue.
+
+# Steps
+
+1. Run `agent sessions sync`. Find the sessions on the topic with `agent sessions search`
+   (several queries) and `agent sessions show ID --turns`, plus any Dan named. Skip sessions
+   with nothing of substance on the topic, and say why in the report.
+2. Choose the issues:
+   - Without a target issue: the log issues these sessions have posted to on the topic. Find
+     them in their transcripts (`agent sessions cat ID --tools --whole`, grep for
+     `gh issue comment` and `issuecomment-`). If there are none, open a new issue with a terse
+     description of the topic as its body, and use that one.
+   - With a target issue: that issue only, whatever the sessions posted to before. If Dan asked
+     for a new issue, open it.
+3. Fetch each issue in full with `gh-issue-to-md N`.
+4. Ask each session, one at a time, whether it knows anything valuable on the topic that the
+   issues do not already contain, and if so to post it as a new comment on the right issue.
+   Give it the issues' content inline in the prompt, not as file references, so that it reads
+   them in full. Re-fetch the issues before each session, so that later sessions see what
+   earlier ones posted.
+5. If you opened an issue, read all its comments at the end and replace its body with a terse
+   summary of them.
+
+# Asking a session
+
+Post the prompt as a comment on the session's control issue (`agent sessions issue ID` creates
+it and prints it) and run `agent sessions attend --once`, which runs the turn headless and posts
+the answer there.
+
+- Never ask a session that is open in a terminal: attend would stop that process and close
+  Dan's pane. A session is open if a file in ~/.claude/sessions/*.json has its id as
+  `sessionId` and its `pid` is alive (`ps -p PID`). List such sessions in the report, with the
+  prompt for Dan to paste into them himself.
+- A GitHub comment holds at most 65,536 characters. When the inline issues are longer, split
+  the prompt into numbered parts, one comment each, and say in every part but the last: reply
+  only "received". Each part is a separate turn.
+- Do not push a session into compaction: its context plus the inline material must stay well
+  below its model's context window (`agent sessions show ID` gives its context size).
+- Attend refuses prompts older than ten minutes, and has hourly and daily spending limits. If
+  it refuses, or `~/.agent-sessions/tripped` exists, stop and report; never clear the breaker.
+
+# Report
+
+End with a short report for Dan:
+
+- The issues, with links, and any you opened.
+- Each session asked: whether it had anything new, and the links to the comments it posted.
+- Sessions skipped, and why.
+- Sessions open in a terminal, each with the prompt for Dan to paste.

@@ -48,6 +48,11 @@ SCRIPTS = {
     agent new [--personal] [-m MODEL] RECIPE.toml
     Runs prepare-session and shows its report. Enter starts the session with the
     recipe's context; typed changes revise the recipe first. Requires tmux.""",
+    "exfiltrate": """Get the sessions that discussed a topic to write what they know into log issues.
+
+    \b
+    agent exfiltrate "TOPIC, and optionally sessions and a target issue"
+    A prompt script. Never asks a session open in a terminal; reports it instead.""",
     "mlx-serve": """Serve a local MLX model over an OpenAI-compatible API.
 
     \b

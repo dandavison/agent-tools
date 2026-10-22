@@ -132,62 +132,22 @@ I sync the issues to markdown files stored in the repo; my local clone is ~/src/
 Exfiltrate means to extract from agent conversations their knowledge/understanding/beliefs/wisdom
 etc regarding a certain topic and post it to issue(s) in my log repo.
 
-There are two forms of "exfiltrate": either I will ask you to exfiltrate to a certain target issue
-number, or I will ask you to exfiltrate without specifying an issue number.
+The procedure is a script; do not do its steps yourself. Run
+`agent exfiltrate "<my words: the topic, and any sessions or target issue I named>"`. It takes
+minutes; run it in the background if your harness allows. Show me its report. It never asks a
+session that is open in a terminal, because that would close my pane; it lists those with a
+prompt for me to paste into them.
 
-Use `agent sessions` (above) to find sessions. Run `agent sessions sync` before you start.
-
-To ask a session something, post the prompt as a comment on its control issue
-(`agent sessions issue <id>` creates it) and run `agent sessions attend --once`, which runs the
-turn headless and posts the answer. Know before you do it:
-
-- If the session is open in a terminal, attend stops that process first. The transcript is
-  kept, but the user's pane closes. Tell the user before asking a live session.
-- A GitHub comment holds at most 65,536 characters, so long inline material needs several
-  comments, and each comment is a separate turn.
-- Attend refuses prompts older than ten minutes, and has hourly and daily spending limits. If
-  `~/.agent-sessions/tripped` exists it refuses everything; clearing it is the user's call.
-
-#### Exfiltrate without a target issue number
-
-When I ask you to "exfiltrate" agent discussion on a certain topic, do the following:
-
-1. Find the relevant sessions.
-2. Determine which log issues those agents have been posting comments to by studying the transcript
-   or asking the agents. If they have not posted to any log issue then open a new issue, and post a
-   terse description of the topic in question to the body, and consider the set of issues to be this
-   one issue.
-3. Use gh-issue-to-md to dump to disk the full markdown content of each issue.
-4. Ask each agent session to determine whether it has
-   any valuable knowledge/understanding/wisdom/belief that is not already reflected in the log issue
-   comments. If it does, then it should post a new comment to the appropriate issue(s) containing
-   this knowledge/understanding/wisdom/belief. To do this step, provide the appropriate subset of
-   the issue markdown files dumped at step 3 inline in the prompt you deliver to the agent session.
-   I would like you to provide these inline in your prompt, not merely as file references, so that
-   the agent is forced to read it in its entirety. However, avoid triggering compaction in the agent
-   sessions.
-5. Return to me the issue numbers.
-
-If you created a new issue at step 2 then at the end, read all comments via gh-issue-to-md and
-update the body to contain a terse executive summary.
-
-
-#### Exfiltrate to a target issue number
-
-In this case, your task is to extract all knowledge/understanding/beliefs/wisdom etc on the topic to
-a _new_ issue.
-
-Formally, the procedure is as above but you disregard any log issues they may have already posted
-to. I.e. at step 2 you _assume_ that they have posted to no log issue and open a new one, and then
-proceed, so that the end result is that each agent session is asked to post a comment to the new
-issue.
+With a target issue, everything goes to that issue, whatever the sessions posted to before.
+Without one, each session writes to the issues it has been posting to on the topic, or to a new
+issue if there are none.
 
 
 ### Gather-context
 
 When I ask you to gather-context on a topic, do the following:
 
-1. Exfiltrate the topic
+1. Exfiltrate the topic (`agent exfiltrate`).
 2. Open a new issue and write a placeholder topic summary in the body.
 3. Derive search queries from the topic: key entities, technical terms, people, timeframes.
 4. Search each source below in a parallel subagent, so that your own context stays clean. Each
@@ -266,6 +226,12 @@ Commands:
     related_sessions (for agent quiz); relative paths in it are relative to it. Recipes are in ~/src/temporalio-etc/log/recipes.
     
     agent ctx ~/src/temporalio-etc/log/recipes/batch-cancel.toml | agent with-input
+
+  exfiltrate
+    Get the sessions that discussed a topic to write what they know into log issues.
+
+    agent exfiltrate "TOPIC, and optionally sessions and a target issue"
+    A prompt script. Never asks a session open in a terminal; reports it instead.
 
   from-issues
     Start an interactive agent with GitHub issues pre-filled in its input.

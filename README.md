@@ -11,8 +11,8 @@ executable prompt scripts, and from the zsh prompt. Specific to my setup.
 | Get a shell command I can't remember | Describe it, then Ctrl-X Ctrl-A |
 | Start work on something new that needs context | `agent new "what I'm trying to do, and what it must not see"` |
 | Carry on with a topic that has a recipe | `agent new ~/src/temporalio-etc/log/recipes/NAME.toml` |
-| Keep what a session learned | Tell it "exfiltrate to the topic's issue" before closing it |
-| Replace a session whose context is nearly full | Have it exfiltrate, quit, then `agent new RECIPE.toml` |
+| Keep what a session learned | Tell it to write back to the topic's issue, or `agent exfiltrate "TOPIC"` for sessions no longer open |
+| Replace a session whose context is nearly full | Have it write back, quit, then `agent new RECIPE.toml` |
 | Gather everything on a topic from Slack, Notion, meetings and code | Tell an agent "gather-context on TOPIC" |
 | See what a recipe's context contains | `agent overview RECIPE.toml` |
 | Check a prepared session knows as much as an existing one | `q` in `agent new`, or `agent quiz RECIPE.toml` |
@@ -199,6 +199,7 @@ documents it.
 | `agent ctx` | Build an agent's context from sources or a recipe within a token budget. No compression yet. |
 | `agent new` | Prepare a session from a description or recipe, and start it on Enter. |
 | `agent prepare-session` | The prompt script that prepares a recipe. |
+| `agent exfiltrate` | The prompt script that gets sessions to write what they know into log issues. |
 | `agent sessions` | Find, index and resume past sessions. |
 | `agent quiz` | Ask a prepared session and an existing one the same questions, side by side. |
 | `agent overview` | Open a browser page summarising a recipe's sources, sizes and exclusions. |
