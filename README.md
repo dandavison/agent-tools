@@ -3,6 +3,21 @@
 Run prompts on a model you choose (claude, codex, or a local model via pi) from the shell, from
 executable prompt scripts, and from the zsh prompt. Specific to my setup.
 
+## Cheat sheet
+
+| I want to | Do this |
+|-|-|
+| Ask a quick question | Type it at the zsh prompt and end the line with `\|` |
+| Get a shell command I can't remember | Describe it, then Ctrl-X Ctrl-A |
+| Start work on something new that needs context | `agent new "what I'm trying to do, and what it must not see"` |
+| Carry on with a topic that has a recipe | `agent new ~/src/temporalio-etc/log/recipes/NAME.toml` |
+| Keep what a session learned | Tell it "exfiltrate to the topic's issue" before closing it |
+| Replace a session whose context is nearly full | Have it exfiltrate, quit, then `agent new RECIPE.toml` |
+| Gather everything on a topic from Slack, Notion, meetings and code | Tell an agent "gather-context on TOPIC" |
+| Find a past session | `agent-sessions search "QUERY"`, then `agent-sessions show ID --turns` |
+
+Never resume a session: start a new one from its recipe, which picks up what was written back.
+
 ## Examples
 
 Ask from the zsh prompt by ending the line with `|`, or `| MODEL`:
@@ -60,7 +75,7 @@ threads, meetings, files), with a manifest of what went in. `agent ctx --help` l
 source types:
 
 ```
-agent ctx --purpose "implement batch cancel" --budget 80000 \
+agent ctx --purpose "fix the flaky upload test" --budget 80000 \
     issue:212 session:claude:7e90a7c6 meeting:"design review" | agent with-input
 ```
 
@@ -70,8 +85,8 @@ see) and have an agent prepare a saved recipe for it, checking exclusions by pro
 first. Later sessions start from the recipe:
 
 ```
-agent new "implement phase 1 of streams without seeing Moe's work"
-agent new ~/src/temporalio-etc/log/recipes/streams-implementer.toml
+agent new "design a rate limiter without seeing the existing proposal"
+agent new ~/src/temporalio-etc/log/recipes/rate-limiter-designer.toml
 ```
 
 Serve a local model; while it runs, `qwen-local` is offered as a model:
