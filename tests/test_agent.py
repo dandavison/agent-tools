@@ -36,6 +36,7 @@ WRAPPED = [
     "mlx-serve",
     "prepare-session",
     "new",
+    "exfiltrate",
 ]
 
 
@@ -129,8 +130,9 @@ def test_subcommand_runs_its_script_with_args(home: Path, subcommand: str) -> No
     assert argv(home, f"agent-{subcommand}") == ["-m", "opus", "--", "x"]
 
 
-def test_prepare_session_is_a_prompt_script_run_by_agent_run() -> None:
-    script = REPO / "prompts" / "agent-prepare-session"
+@pytest.mark.parametrize("name", ["prepare-session", "exfiltrate"])
+def test_procedure_is_a_prompt_script_run_by_agent_run(name: str) -> None:
+    script = REPO / "prompts" / f"agent-{name}"
     assert os.access(script, os.X_OK)
     assert script.read_text().startswith("#!/usr/bin/env -S agent-run ")
 
