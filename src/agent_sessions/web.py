@@ -76,6 +76,8 @@ def handle(path: str, query_string: str = "") -> Response:
             return _session(conn, id, params)
         if name := _tail(path, "/network/"):
             return _network(conn, name)
+        if path in ("/genealogy", "/genealogy.json"):
+            return _forest(conn, params, as_json=path.endswith(".json"))
         if id := _tail(path, "/genealogy/"):
             return _genealogy(conn, id)
         return _error(404, "No such page.")
@@ -91,24 +93,14 @@ def _tail(path: str, prefix: str) -> str:
 
 
 def _sessions(conn: sqlite3.Connection, params: dict[str, str]) -> Response:
-    text = params.get("q", "").strip()
-    filters = query.Filters(
-        project=params.get("project") or None,
-        agent=params.get("agent") or None,
-        since=params.get("since") or None,
-        min_context=params.get("min_context") or None,
-    )
     sort = params.get("sort", "") if params.get("sort") in query.SORTS else "recent"
     reverse = params.get("reverse") in ("1", "true")
     page = _page_number(params)
+    text = params.get("q", "").strip()
     try:
         # One more than fits, which is how the next page is known to exist
         # without counting the whole table.
-        found = (
-            query.search(conn, text, filters, LIMIT + 1, page * LIMIT)
-            if text
-            else query.recent(conn, filters, sort, LIMIT + 1, reverse, page * LIMIT)
-        )
+        found = _found(conn, params, sort, reverse, LIMIT + 1, page * LIMIT)
     except (ValueError, sqlite3.OperationalError) as e:
         return _page(
             "agent-sessions", _controls(params, sort) + _projects(conn), _banner(str(e)), status=400
@@ -127,10 +119,41 @@ def _sessions(conn: sqlite3.Connection, params: dict[str, str]) -> Response:
         "agent-sessions",
         _controls(params, sort) + _projects(conn),
         _flash(params),
+        _forest_link(params) if found else "",
         body,
         _pager(params, page, len(found), more),
         _footer(conn),
     )
+
+
+def _found(
+    conn: sqlite3.Connection,
+    params: dict[str, str],
+    sort: str,
+    reverse: bool,
+    limit: int,
+    offset: int = 0,
+) -> list[dict]:
+    """The sessions the search form asks for. A negative limit is none."""
+    text = params.get("q", "").strip()
+    filters = query.Filters(
+        project=params.get("project") or None,
+        agent=params.get("agent") or None,
+        since=params.get("since") or None,
+        min_context=params.get("min_context") or None,
+    )
+    if text:
+        return query.search(conn, text, filters, limit, offset)
+    return query.recent(conn, filters, sort, limit, reverse, offset)
+
+
+def _forest_link(params: dict[str, str]) -> str:
+    where = _h(_carried(params))
+    return f"<p class=actions><a class=resume href='/genealogy?{where}'>genealogy</a></p>"
+
+
+def _carried(params: dict[str, str]) -> str:
+    return urlencode({k: v for k, v in params.items() if k in CARRIED and v})
 
 
 def _page_number(params: dict[str, str]) -> int:
@@ -421,6 +444,19 @@ def _network(conn: sqlite3.Connection, name: str) -> Response:
         return _error(404, "No such network.")
     page = (Path(__file__).parent / "network.html").read_text()
     return Response(page.replace("{{DATA}}", f"/network/{quote(name)}.json"))
+
+
+def _forest(conn: sqlite3.Connection, params: dict[str, str], as_json: bool) -> Response:
+    """The genealogy of every session a search finds, not only the page of them shown."""
+    if not as_json:
+        page = (Path(__file__).parent / "genealogy.html").read_text()
+        return Response(page.replace("{{DATA}}", f"/genealogy.json?{_carried(params)}"))
+    try:
+        found = _found(conn, params, "recent", False, -1)
+    except (ValueError, sqlite3.OperationalError) as e:
+        return _error(400, str(e))
+    shown = genealogy.forest(conn, {s["id"] for s in found})
+    return Response(orjson.dumps(shown).decode(), content_type="application/json")
 
 
 def _genealogy(conn: sqlite3.Connection, id: str) -> Response:

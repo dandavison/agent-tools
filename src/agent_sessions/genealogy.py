@@ -42,6 +42,7 @@ class Merged:
 
     sessions: dict[str, dict]
     forked_from: dict[str, str]
+    selected: set[str]
     steps: dict[str, dict] = field(default_factory=dict)
     members: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
     parent: dict[str, str] = field(default_factory=dict)
@@ -49,14 +50,18 @@ class Merged:
 
 
 def of(conn: sqlite3.Connection, session_id: str) -> dict:
-    forked_from = _lineage(conn, session_id)
+    """The whole lineage of one session."""
+    forked_from = _lineage(conn, {session_id})
     ids = {session_id, *forked_from, *forked_from.values()}
-    merged = _merge(conn, _sessions(conn, ids), forked_from)
-    roots = _order(merged, [u for u in merged.steps if u not in merged.parent])
-    return {
-        "focus": session_id,
-        "nodes": [seg for root in roots for seg in _segments(merged, root, None)],
-    }
+    return {"focus": session_id, "nodes": _nodes(conn, ids, forked_from, ids)}
+
+
+def forest(conn: sqlite3.Connection, selected: set[str]) -> dict:
+    """The lineages of a set of sessions, with others only where they join two of the set."""
+    forked_from = _lineage(conn, selected)
+    ids = _joining(selected, forked_from)
+    joined = {c: p for c, p in forked_from.items() if c in ids and p in ids}
+    return {"focus": None, "nodes": _nodes(conn, ids, joined, selected)}
 
 
 def said(uuid: str, ts: int | None, text: str) -> list[dict]:
@@ -82,10 +87,33 @@ def _sessions(conn: sqlite3.Connection, ids: set[str]) -> dict[str, dict]:
     }
 
 
+def _nodes(
+    conn: sqlite3.Connection, ids: set[str], forked_from: dict[str, str], selected: set[str]
+) -> list[dict]:
+    merged = _merge(conn, _sessions(conn, ids), forked_from, selected)
+    roots = _order(merged, [u for u in merged.steps if u not in merged.parent])
+    return [seg for root in roots for seg in _segments(merged, root, None, root)]
+
+
+def _joining(selected: set[str], forked_from: dict[str, str]) -> set[str]:
+    """The selected sessions, and those on the forks between two of them."""
+    neighbours: dict[str, set[str]] = defaultdict(set)
+    for child, parent in forked_from.items():
+        neighbours[child].add(parent)
+        neighbours[parent].add(child)
+    ids = selected | neighbours.keys()
+    while loose := {i for i in ids - selected if len(neighbours[i] & ids) <= 1}:
+        ids -= loose
+    return ids
+
+
 def _merge(
-    conn: sqlite3.Connection, sessions: dict[str, dict], forked_from: dict[str, str]
+    conn: sqlite3.Connection,
+    sessions: dict[str, dict],
+    forked_from: dict[str, str],
+    selected: set[str],
 ) -> Merged:
-    merged = Merged(sessions, forked_from)
+    merged = Merged(sessions, forked_from, selected)
     for id, session in sessions.items():
         steps = _steps(_thread(conn, session))
         for before, step in zip([None, *steps], steps, strict=False):
@@ -98,7 +126,7 @@ def _merge(
     return merged
 
 
-def _segments(merged: Merged, start: str, above: str | None) -> list[dict]:
+def _segments(merged: Merged, start: str, above: str | None, tree: str) -> list[dict]:
     """The run from `start` that one set of sessions shares, then what follows it."""
     run = [start]
     while (
@@ -112,13 +140,16 @@ def _segments(merged: Merged, start: str, above: str | None) -> list[dict]:
     segment = {
         "id": start,
         "parent": above,
+        "tree": tree,
+        "inside": bool(merged.members[start] & merged.selected),
         "session": {"id": owner["id"], "title": owner["title"]},
         "members": sorted(merged.members[start]),
         "started_at": steps[0]["ts"],
         "context_tokens": contexts[-1] if contexts else 0,
         "items": [item for s in steps for item in s["items"]],
     }
-    return [segment, *(s for kid in _order(merged, kids) for s in _segments(merged, kid, start))]
+    below = (s for kid in _order(merged, kids) for s in _segments(merged, kid, start, tree))
+    return [segment, *below]
 
 
 def _owner(merged: Merged, uuid: str) -> str:
@@ -134,10 +165,10 @@ def _order(merged: Merged, uuids: list[str]) -> list[str]:
     return sorted(uuids, key=lambda u: (merged.steps[u]["ts"] or 0, _owner(merged, u)))
 
 
-def _lineage(conn: sqlite3.Connection, session_id: str) -> dict[str, str]:
-    """The forks joining this session to others, in either direction: child to parent."""
+def _lineage(conn: sqlite3.Connection, ids: set[str]) -> dict[str, str]:
+    """The forks joining these sessions to others, in either direction: child to parent."""
     forked_from: dict[str, str] = {}
-    found, frontier = {session_id}, [session_id]
+    found, frontier = set(ids), list(ids)
     while frontier:
         at = frontier.pop()
         for row in conn.execute(

@@ -87,6 +87,7 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
 }
 .segment.focus { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); box-shadow: var(--shadow-lift); }
+.segment.outside { opacity: .45; }
 .segment .band { height: 4px; background: var(--accent); }
 .segment header { padding: 10px 14px 8px; display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid var(--line); }
 .segment header .title { font-weight: 650; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
@@ -187,7 +188,7 @@ function Item({ item }) {
 
 function SegmentNode({ data: n }) {
   return html`
-    <div class=${"segment" + (n.focus ? " focus" : "")} style=${{ "--accent": n.accent }}>
+    <div class=${"segment" + (n.focus ? " focus" : "") + (n.inside ? "" : " outside")} style=${{ "--accent": n.accent }}>
       <div class="band" />
       <header>
         <${Copy} id=${n.session.id} />
@@ -222,16 +223,40 @@ function graph(genealogy) {
 }
 
 // Laid out once React Flow has measured the nodes, whose height is their turns.
+// Each tree is laid out alone, then the trees are packed in rows: those that
+// branch first, then single nodes, so a large forest is not one long strip.
+const GAP = 80;
 function layout(nodes, edges) {
-  const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 70 });
-  for (const n of nodes) g.setNode(n.id, { width: n.measured.width, height: n.measured.height });
-  for (const e of edges) g.setEdge(e.source, e.target);
-  dagre.layout(g);
-  return nodes.map((n) => {
-    const { x, y } = g.node(n.id);
-    return { ...n, style: {}, position: { x: x - n.measured.width / 2, y: y - n.measured.height / 2 } };
+  const trees = Map.groupBy(nodes, (n) => n.data.tree);
+  const boxes = [...trees.values()].map((members) => tree(members, edges))
+    .sort((a, b) => (b.nodes.length > 1) - (a.nodes.length > 1));
+  const area = boxes.reduce((sum, b) => sum + (b.width + GAP) * (b.height + GAP), 0);
+  const across = Math.max(...boxes.map((b) => b.width), Math.sqrt(area * 1.6));
+  let x = 0, y = 0, row = 0;
+  return boxes.flatMap((b) => {
+    if (x && x + b.width > across) { x = 0; y += row + GAP; row = 0; }
+    const placed = b.nodes.map((n) => ({ ...n, position: { x: n.position.x + x, y: n.position.y + y } }));
+    x += b.width + GAP;
+    row = Math.max(row, b.height);
+    return placed;
   });
+}
+
+function tree(nodes, edges) {
+  const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 70, marginx: 0, marginy: 0 });
+  const ids = new Set(nodes.map((n) => n.id));
+  for (const n of nodes) g.setNode(n.id, { width: n.measured.width, height: n.measured.height });
+  for (const e of edges) if (ids.has(e.target)) g.setEdge(e.source, e.target);
+  dagre.layout(g);
+  const { width, height } = g.graph();
+  return {
+    width, height,
+    nodes: nodes.map((n) => {
+      const { x, y } = g.node(n.id);
+      return { ...n, style: {}, position: { x: x - n.measured.width / 2, y: y - n.measured.height / 2 } };
+    }),
+  };
 }
 
 function Flow({ genealogy }) {
@@ -251,6 +276,7 @@ function Flow({ genealogy }) {
   }, [laid]);
   const focus = genealogy.nodes.find((n) => n.members.includes(genealogy.focus));
   const sessions = new Set(genealogy.nodes.map((n) => n.session.id)).size;
+  const trees = new Set(genealogy.nodes.map((n) => n.tree)).size;
   return html`
     <${ReactFlow} nodes=${nodes} edges=${initial.edges} onNodesChange=${onNodesChange} nodeTypes=${nodeTypes}
       minZoom=${0.1} maxZoom=${1.6} nodesConnectable=${false} proOptions=${{ hideAttribution: true }}>
@@ -259,8 +285,8 @@ function Flow({ genealogy }) {
     <//>
     <div class="masthead">
       <div class="eyebrow">Genealogy</div>
-      <h1>${focus?.session.title || short(genealogy.focus)}</h1>
-      <div class="summary"><span><b>${sessions}</b> sessions</span></div>
+      <h1>${genealogy.focus ? focus?.session.title || short(genealogy.focus) : "Sessions found"}</h1>
+      <div class="summary"><span><b>${sessions}</b> ${sessions === 1 ? "session" : "sessions"}</span><span><b>${trees}</b> ${trees === 1 ? "tree" : "trees"}</span></div>
     </div>`;
 }
 
