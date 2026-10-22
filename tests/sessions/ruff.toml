@@ -1,0 +1,7 @@
+# agent-sessions' own style, from before it moved into this repo.
+extend = "../../pyproject.toml"
+line-length = 100
+src = ["../../src"]
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
