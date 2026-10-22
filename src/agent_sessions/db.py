@@ -7,7 +7,7 @@ from pathlib import Path
 from agent_sessions.contexts import ContextSource
 from agent_sessions.models import Compaction, Edge, Node, Session
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 DB_PATH = Path.home() / ".agent-sessions" / "index.db"
 
@@ -83,14 +83,17 @@ CREATE TABLE compaction (
 );
 CREATE INDEX compaction_session ON compaction (session_id);
 
--- The sources of the contexts a session was given, each with the issue or
+-- What a session was given at a turn: the sources of a context (kind
+-- 'context') or an issue pasted in alone ('pasted'), each with the issue or
 -- thread it is part of, which is what a search for the source matches.
 CREATE TABLE context_source (
   session_id TEXT NOT NULL REFERENCES session (id) ON DELETE CASCADE,
+  uuid       TEXT NOT NULL,
+  kind       TEXT NOT NULL,
   uri        TEXT NOT NULL,
   identity   TEXT NOT NULL,
   recipe     TEXT,
-  PRIMARY KEY (session_id, uri)
+  PRIMARY KEY (session_id, uuid, kind, uri)
 );
 CREATE INDEX context_source_identity ON context_source (identity);
 
@@ -212,11 +215,11 @@ def write_compactions(conn: sqlite3.Connection, compactions: Iterable[Compaction
 
 
 def write_context_sources(conn: sqlite3.Connection, sources: Iterable[ContextSource]) -> None:
-    rows = [(s.session_id, s.uri, s.identity, s.recipe) for s in sources]
+    rows = [(s.session_id, s.uuid, s.kind, s.uri, s.identity, s.recipe) for s in sources]
     if rows:
         conn.executemany(
-            "INSERT OR REPLACE INTO context_source (session_id, uri, identity, recipe)"
-            " VALUES (?,?,?,?)",
+            "INSERT OR REPLACE INTO context_source"
+            " (session_id, uuid, kind, uri, identity, recipe) VALUES (?,?,?,?,?,?)",
             rows,
         )
 

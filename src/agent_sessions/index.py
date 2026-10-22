@@ -55,7 +55,7 @@ def sync(conn: sqlite3.Connection, agents: list[str] | None = None) -> SyncResul
             db.write_nodes(conn, delta.nodes)
             db.write_edges(conn, delta.edges)
             db.write_compactions(conn, delta.compactions)
-            said = [n.text for n in delta.nodes if n.role == "user"]
+            said = [(n.uuid, n.text) for n in delta.nodes if n.role == "user"]
             db.write_context_sources(conn, contexts.used(delta.session.id, said))
             seen.add(delta.session.id)
             nodes += len(delta.nodes)

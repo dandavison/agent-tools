@@ -98,8 +98,11 @@ a:hover { text-decoration: underline; }
   border: 0; border-radius: 6px; padding: 2px 7px; cursor: copy;
 }
 .items { max-height: 480px; overflow: auto; padding: 6px 0; }
-.turn { display: block; padding: 1px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
-.turn:hover { background: var(--card-2); text-decoration: none; }
+.turn { display: flex; align-items: baseline; gap: 6px; padding: 1px 14px; }
+.turn:hover { background: var(--card-2); }
+.turn .said { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.turn .said:hover { text-decoration: none; }
+.turn .issue { flex: none; font: 10.5px var(--mono); padding: 0 5px; border-radius: 5px; border: 1px solid var(--line); background: var(--card-2); }
 .compaction {
   margin: 5px 14px; display: flex; align-items: center; gap: 8px;
   color: var(--warn); font-size: 11.5px; font-weight: 500;
@@ -182,8 +185,13 @@ function Item({ item, session }) {
   if (item.kind === "context") return html`<${Context} c=${item} />`;
   if (item.kind === "compaction") return html`
     <div class="compaction">compacted (${item.trigger}) ${tokens(item.pre_tokens)} → ${tokens(item.post_tokens)}</div>`;
-  return html`<a class="turn nodrag" href=${`/session/${session}#${item.uuid}`}
-    title=${`${clock(item.ts)}: ${item.text}`}>${item.text}</a>`;
+  return html`
+    <div class="turn">
+      <a class="said nodrag" href=${`/session/${session}#${item.uuid}`}
+        title=${`${clock(item.ts)}: ${item.text}`}>${item.text}</a>
+      ${item.issues.map((i) => html`<a class="issue nodrag" key=${i.uri} href=${i.list}
+        title=${`pasted ${i.uri}`}>${sourceLabel(i.uri)}</a>`)}
+    </div>`;
 }
 
 function SegmentNode({ data: n }) {

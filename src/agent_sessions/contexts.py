@@ -1,8 +1,11 @@
-"""What a session was started from: the context `agent ctx` built and `agent with-input` pasted.
+"""What a session was given: the context `agent ctx` built, and issues pasted into it.
 
-Claude records the paste whole, inside `<pasted_content>`. The context starts
-`# Context`, then, if a recipe built it, `Recipe: <path> @ <commit>`, and lists
-its sources in a manifest table.
+A context is what `agent with-input` pasted, which Claude records whole, inside
+`<pasted_content>`. It starts `# Context`, then, if a recipe built it,
+`Recipe: <path> @ <commit>`, and lists its sources in a manifest table.
+
+An issue as `gh-issue-to-md` writes it starts with YAML front matter giving its
+number and, since 2026-10-22, its url; without one it is an issue of the log repo.
 """
 
 import re
@@ -21,6 +24,7 @@ RECIPE = re.compile(r"# Context\n\nRecipe: (?P<path>.+?) (?:@ (?P<commit>\w+)|\(
 MANIFEST = re.compile(
     r"^\| source \| included \| tokens \|\n\|-\|-\|-\|\n(?P<rows>(?:\|.*\|\n)*)", re.M
 )
+FRONT_MATTER = re.compile(r"^---\nnumber: (?P<n>\d+)\n(?:url: (?P<url>\S+)\n)?", re.M)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,9 +43,15 @@ class Context:
 
 @dataclass(frozen=True, slots=True)
 class ContextSource:
-    """A source of a context a session was given, as the index holds it."""
+    """A source a session was given at a turn, as the index holds it.
+
+    `kind` is `context`, a source in the manifest of a context, or `pasted`, an
+    issue pasted in on its own.
+    """
 
     session_id: str
+    uuid: str
+    kind: str
     uri: str
     recipe: str | None
 
@@ -65,13 +75,36 @@ def parse(text: str) -> Context | None:
     )
 
 
-def used(session_id: str, texts: list[str]) -> list[ContextSource]:
-    """The sources of every context pasted into these messages of one session."""
+def used(session_id: str, said: list[tuple[str, str]]) -> list[ContextSource]:
+    """What one session was given in these user messages, each `(uuid, text)`."""
+    return [source for uuid, text in said for source in _given(session_id, uuid, text)]
+
+
+def pasted_issues(text: str) -> list[str]:
+    """The issues in a message, as source uris."""
     return [
-        ContextSource(session_id, s.uri, built.recipe.stem if built.recipe else None)
-        for text in texts
-        if (built := parse(text))
-        for s in built.sources
+        identity(m["url"]) if m["url"] else f"issue:{m['n']}" for m in FRONT_MATTER.finditer(text)
+    ]
+
+
+def outside(text: str) -> str:
+    """What a message holds besides a context: the issues inside one were not pasted alone."""
+    built = parse(text)
+    return built.typed if built else text
+
+
+def _given(session_id: str, uuid: str, text: str) -> list[ContextSource]:
+    built = parse(text)
+    recipe = built.recipe.stem if built and built.recipe else None
+    return [
+        *(
+            ContextSource(session_id, uuid, "context", s.uri, recipe)
+            for s in (built.sources if built else [])
+        ),
+        *(
+            ContextSource(session_id, uuid, "pasted", uri, None)
+            for uri in pasted_issues(outside(text))
+        ),
     ]
 
 

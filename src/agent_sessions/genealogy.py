@@ -72,6 +72,10 @@ def said(uuid: str, ts: int | None, text: str) -> list[dict]:
         "uuid": uuid,
         "ts": ts,
         "text": _line(built.typed if built else text),
+        "issues": [
+            {"uri": uri, "list": _listing(uri)}
+            for uri in contexts.pasted_issues(contexts.outside(text))
+        ],
     }
     return ([_context(built)] if built else []) + ([turn] if turn["text"] else [])
 
@@ -269,8 +273,13 @@ def _source(source: contexts.Source) -> dict:
         "uri": source.uri,
         "tokens": source.tokens,
         "url": _url(source.uri),
-        "list": f"/?{urlencode({'source': contexts.identity(source.uri)})}",
+        "list": _listing(contexts.identity(source.uri)),
     }
+
+
+def _listing(source: str) -> str:
+    """The list of sessions given this source."""
+    return f"/?{urlencode({'source': source})}"
 
 
 def _url(uri: str) -> str | None:
