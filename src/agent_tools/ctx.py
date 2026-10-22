@@ -185,7 +185,8 @@ def read_issue(uri: str) -> str:
             raise SourceError(f"{uri}: unknown option {option}")
         excluded |= set(ids.split(","))
     number = match["n"] or match["url_n"]
-    api = f"repos/{match['repo'] or LOG_REPO}/issues/{number}"
+    repo = match["repo"] or LOG_REPO
+    api = f"repos/{repo}/issues/{number}"
     issue = json.loads(run(uri, ["gh", "api", api]))
     pages = json.loads(
         run(uri, ["gh", "api", "--paginate", "--slurp", f"{api}/comments"])
@@ -195,14 +196,15 @@ def read_issue(uri: str) -> str:
     if missing := (selected | excluded) - comments.keys():
         raise SourceError(f"{uri}: no {', '.join(sorted(missing))} in the issue")
     shown = [(id, c) for id, c in comments.items() if id in selected]
-    return format_issue(number, issue, shown, body=not match["comment"])
+    return format_issue(repo, number, issue, shown, body=not match["comment"])
 
 
 def format_issue(
-    number: str, issue: dict, comments: list[tuple[str, dict]], body: bool
+    repo: str, number: str, issue: dict, comments: list[tuple[str, dict]], body: bool
 ) -> str:
     text = (
-        f"---\nnumber: {number}\ndate: {issue['created_at'][:10]}\n"
+        f"---\nnumber: {number}\nurl: https://github.com/{repo}/issues/{number}\n"
+        f"date: {issue['created_at'][:10]}\n"
         f"title: {json.dumps(issue['title'])}\n---\n\n# {issue['title']}\n\n"
     )
     if body and issue.get("body"):
