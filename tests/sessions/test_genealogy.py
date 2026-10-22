@@ -330,3 +330,56 @@ def test_a_slash_command_is_one_row_of_the_command_and_its_arguments(text: str, 
 
 def test_a_turn_on_the_session_page_can_be_linked_to(conn) -> None:
     assert "id='u4'" in web.handle(f"/session/{CHILD}").body
+
+
+def test_an_ide_notice_is_not_a_turn() -> None:
+    text = "<ide_opened_file>The user opened the file /x.py in the IDE.</ide_opened_file>"
+    assert genealogy.said("u9", 100, text) == []
+
+
+@pytest.fixture
+def listed(conn):
+    """The parent and its fork, active at different times; an unrelated session between."""
+    for id, ended_at, context in (
+        (PARENT, 400, 900_000),
+        (CHILD, 500, 100_000),
+        (UNRELATED, 450, 5000),
+    ):
+        conn.execute(
+            "UPDATE session SET ended_at = ?, context_tokens = ? WHERE id = ?",
+            (ended_at, context, id),
+        )
+    db.reindex_fts(conn)
+    conn.commit()
+    return conn
+
+
+def test_a_row_of_the_list_is_a_lineage_named_for_its_latest_session(listed) -> None:
+    body = web.handle("/").body
+    assert f"href='/genealogy/{CHILD}'>streams-reviewer</a>" in body
+    assert "2 sessions" in body
+    assert f"href='/session/{PARENT}'" not in body
+    assert f"href='/session/{CHILD}'" not in body
+
+
+def test_a_lineage_of_one_session_is_a_row_as_before(listed) -> None:
+    assert f"href='/session/{UNRELATED}'>something else</a>" in web.handle("/").body
+
+
+def row(body: str, containing: str) -> str:
+    return next(r for r in body.split("<tr>") if containing in r)
+
+
+def test_a_lineage_row_shows_the_largest_context_in_it(listed) -> None:
+    assert "<td class=num>900k" in row(web.handle("/").body, f"/genealogy/{CHILD}'")
+
+
+def test_lineages_are_ordered_by_their_latest_activity(listed) -> None:
+    body = web.handle("/").body
+    assert body.index(f"/genealogy/{CHILD}'") < body.index(f"/session/{UNRELATED}'")
+
+
+def test_a_lineage_says_how_many_of_its_sessions_matched(listed) -> None:
+    body = web.handle("/", "q=three").body
+    assert f"href='/genealogy/{CHILD}'" in body
+    assert "2 sessions, 1 matched" in body
