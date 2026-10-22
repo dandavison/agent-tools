@@ -65,9 +65,15 @@ def generate(command: click.Group | None = None) -> str:
     from agent_sessions.cli import main
 
     command = command if command is not None else main
-    lines = [FRONTMATTER.strip(), PREAMBLE.rstrip(), ""]
+    lines = [FRONTMATTER.strip(), PREAMBLE.rstrip(), "", *commands(command, COMMAND)]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def commands(command: click.Group, prefix: str) -> list[str]:
+    """Each subcommand of `command`, invoked as `prefix`."""
+    lines = []
     for name, sub in sorted(command.commands.items()):
-        lines.append(f"### `{' '.join([COMMAND, name, *_arguments(sub)])}`")
+        lines.append(f"### `{' '.join([prefix, name, *_arguments(sub)])}`")
         lines.append("")
         lines.append(_summary(sub))
         if options := _options(sub):
@@ -77,7 +83,7 @@ def generate(command: click.Group | None = None) -> str:
             lines.append("")
             lines += examples
         lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
+    return lines
 
 
 def body() -> str:

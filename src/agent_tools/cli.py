@@ -173,8 +173,7 @@ def ctx_command(
         session:claude:7e90a7c6 | agent with-input
     \b
     A recipe holds purpose, budget, sources, exclusions, provenance and optionally
-    related_sessions (for agent quiz); relative
-    paths in it are relative to it. Recipes are in ~/src/temporalio-etc/log/recipes.
+    related_sessions (for agent quiz); relative paths in it are relative to it. Recipes are in ~/src/temporalio-etc/log/recipes.
     \b
     agent ctx ~/src/temporalio-etc/log/recipes/batch-cancel.toml | agent with-input
     """

@@ -1,4 +1,4 @@
-.PHONY: install test
+.PHONY: install test skill
 
 install:
 	mkdir -p ~/bin ~/.config
@@ -9,3 +9,6 @@ install:
 test:
 	uv run pytest -q
 	tests/test-agent-text
+
+skill:
+	uv run python -m agent_tools.skill

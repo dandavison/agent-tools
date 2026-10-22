@@ -1,23 +1,18 @@
 ---
 name: agent-tools
 description: |
-  The `agent` CLI: run prompts non-interactively on a chosen model, build a session's context
-  from issues, sessions, Slack, meetings and files (`agent ctx`), and prepare a new session
-  with chosen context (`agent prepare-session`). Use when asked to run a prompt on another
-  model, to build or rebuild a context, or to set up a session for a purpose. Also work with
-  the log repo (temporalio/dandavison-log): exfiltrate, gather-context, map-sessions.
-  Triggers: "agent run", "agent ctx", "prepare a session", "set me up to",
-  "start a session that", "context recipe", "log", "exfiltrate", "gather-context",
-  "assemble context", "context brief", "map-sessions"
+  The `agent` CLI: run prompts on a chosen model, build a session's context from sources and
+  recipes, prepare, compare and start sessions, and find past sessions (`agent sessions`).
+  Also the log repo procedures: exfiltrate, gather-context, map-sessions.
 argument-hint: "exfiltrate|gather-context|map-sessions|prepare-session <topic or description>"
 ---
 
 # agent-tools
 
-`agent --help` documents every subcommand in full. Read it before using one.
-
 When invoked with arguments, the first word chooses the procedure below (exfiltrate,
 gather-context, map-sessions, prepare-session) and the rest is its topic or description.
+
+The full help of every command is at the end of this file, so you do not need `--help`.
 
 ## What you may run
 
@@ -25,9 +20,13 @@ gather-context, map-sessions, prepare-session) and the rest is its topic or desc
   (or set `AGENT_MODEL`): without a terminal there is no model menu.
 - `agent ctx` prints a context as Markdown. It only reads.
 - `agent prepare-session` prepares a context recipe (below).
+- `agent overview RECIPE.toml` opens a page summarising a recipe's sources in the browser.
+- `agent sessions` finds and reads past sessions (below). `agent sessions resume` and
+  `agent sessions attend` start agents; run them only when asked.
 
-Never run `agent`, `agent start`, `agent new`, `agent with-input` or `agent from-issues`.
-They start interactive sessions, which the user starts. Give the user the command instead.
+Never run `agent`, `agent start`, `agent new`, `agent quiz`, `agent with-input` or
+`agent from-issues`. They start interactive sessions, which the user starts. Give the user
+the command instead.
 
 ## Building context
 
@@ -37,9 +36,12 @@ function of sources, a token budget and a purpose.
 
 Principles:
 
-- The durable unit is a topic, held in a log issue. Sessions are disposable: what a session
-  learns is written back to the issue (see Exfiltrate below), and a new session is built from
-  the issue rather than by resuming or forking an old one.
+- The durable unit is a topic, held in log issues. What a session learns is written back to
+  them (see Exfiltrate below), so that a new session can be built from them.
+- Continue a live session while the task is the same and its context is well below the
+  limit. Start a new one from its recipe when the purpose changes, the context is large or
+  full of dead ends, or the session has sat idle. Do not revive an idle session for a new
+  purpose.
 - Prefer written-down sources (log issues) to session transcripts. Use a transcript only for
   material that was never written down.
 - Choosing sources needs judgement; building the context does not. An agent chooses the
@@ -49,8 +51,9 @@ Principles:
   excluded material is itself excluded. Where only part of a source is excluded, a filtered
   copy is posted to a log issue and used instead. Traces that cannot be removed are recorded.
 - Every source must be permanent (a log issue, a git repo), not a scratch file.
-- The context starts with a manifest of its sources and their sizes, so omissions are
-  visible.
+- A context starts with the recipe and commit that built it, then a manifest of its sources
+  and their sizes. It is the session's first message, so the transcript records where the
+  session came from; `agent sessions ls --source` and `--recipe` find sessions by it.
 
 Limits: sources go in raw, and nothing is compressed when they exceed the budget. An exclusion
 is an instruction to the session, not a mechanism: links in its sources could still lead it to
@@ -70,6 +73,9 @@ not see), the procedure is a script; do not do its steps yourself.
 3. To change a recipe, pass the user's words on verbatim:
    `agent prepare-session <recipe path> "<their words>"`. It commits again.
 
+The report lists the existing sessions on the topic and whether each has written back what it
+learned; the recipe records them as `related_sessions`. Suggest exfiltrating any that have not.
+
 The script asks before one kind of action only: posting a filtered copy or a scratch file to a
 log issue, which an exclusion can need. It reports what it would post; pass the user's answer
 on as in step 3. Never approve a posting on the user's behalf.
@@ -78,13 +84,43 @@ When the prepare-session prompt's rules change, offer to update existing recipes
 the current rules"). The user describes what they want in their own words; you write and run
 the commands.
 
-The session's first job is to state its understanding and open questions, and wait. If the
-user types a request after the context before sending, it states its understanding briefly
-and then does the request. The latest state (a handoff) comes first in its context. It writes back
-what it learns to the topic's issue. When it grows too large, it is rebuilt from its recipe,
-which then picks up the written-back state:
+The user starts the session with `agent new <recipe>`, which also offers `agent quiz`: the same
+questions put to the new session and to one of the recipe's `related_sessions`, answers side by
+side. The session's first job is to state its understanding and open questions, and wait. If
+the user types a request after the context before sending, it states its understanding briefly
+and then does the request. The latest state (a handoff) comes first in its context. It writes
+back what it learns to the topic's issue. When it grows too large, it is rebuilt from its
+recipe, which then picks up the written-back state.
 
-    agent ctx ~/src/temporalio-etc/log/recipes/<name>.toml | agent with-input
+## Past sessions
+
+`agent sessions` (also installed as `agent-sessions`) indexes the transcripts of Claude Code
+sessions and finds, reads and resumes them.
+
+    agent sessions search "worktree relocation" -p wormhole   # find it
+    agent sessions show <id> --turns                          # read what was said
+    agent sessions cat <id> --tools                           # and what was run
+    agent sessions ls --source issue:413                      # built from, or pasted, issue 413
+
+- Output adapts to the caller: you get TSV with nothing truncated, and full ids and
+  timestamps. Add `--json` for a structured payload, `-q` for bare ids. Hints and errors go to
+  stderr; only data goes to stdout. Exit codes: 0 found something, 1 found nothing, 2 called
+  wrong.
+- Ids round-trip: whatever `search` prints is accepted by every other command, and any
+  unambiguous prefix will do.
+- Every command prints the next one to run, with the id filled in.
+- Matching is case-insensitive and stemmed. Tool calls and their output are not indexed, so
+  `search` matches what was said, not what was run.
+- Context size is the peak the session reached, not a sum of its turns.
+- `-p` takes several project globs, space-separated.
+- The index is a cache over transcript files, refreshed by `agent sessions sync`. Do not sync
+  unprompted: it is the user's call, and results are usually fine without it.
+- `agent sessions serve` serves the index in a browser. `/genealogy/<id>` shows a lineage of
+  forked sessions as a tree, each with the context it started from; the list page links to the
+  genealogy of everything a search finds. Point the user at these pages rather than
+  reconstructing lineages yourself.
+- `agent sessions tree <id>` records a fork of a fork against the wrong parent. The genealogy
+  page builds trees from shared turns and is right.
 
 ## Log repo
 
@@ -99,21 +135,30 @@ etc regarding a certain topic and post it to issue(s) in my log repo.
 There are two forms of "exfiltrate": either I will ask you to exfiltrate to a certain target issue
 number, or I will ask you to exfiltrate without specifying an issue number.
 
-You will be using the /agent-sessions skill to find sessions and interact with them.
+Use `agent sessions` (above) to find sessions. Run `agent sessions sync` before you start.
 
-Run agent-sessions sync before you start.
+To ask a session something, post the prompt as a comment on its control issue
+(`agent sessions issue <id>` creates it) and run `agent sessions attend --once`, which runs the
+turn headless and posts the answer. Know before you do it:
+
+- If the session is open in a terminal, attend stops that process first. The transcript is
+  kept, but the user's pane closes. Tell the user before asking a live session.
+- A GitHub comment holds at most 65,536 characters, so long inline material needs several
+  comments, and each comment is a separate turn.
+- Attend refuses prompts older than ten minutes, and has hourly and daily spending limits. If
+  `~/.agent-sessions/tripped` exists it refuses everything; clearing it is the user's call.
 
 #### Exfiltrate without a target issue number
 
 When I ask you to "exfiltrate" agent discussion on a certain topic, do the following:
 
-1. Use /agent-sessions to find relevant agent sessions.
+1. Find the relevant sessions.
 2. Determine which log issues those agents have been posting comments to by studying the transcript
    or asking the agents. If they have not posted to any log issue then open a new issue, and post a
    terse description of the topic in question to the body, and consider the set of issues to be this
    one issue.
 3. Use gh-issue-to-md to dump to disk the full markdown content of each issue.
-4. For each agent session, use /agent-sessions to ask that agent session to determine whether it has
+4. Ask each agent session to determine whether it has
    any valuable knowledge/understanding/wisdom/belief that is not already reflected in the log issue
    comments. If it does, then it should post a new comment to the appropriate issue(s) containing
    this knowledge/understanding/wisdom/belief. To do this step, provide the appropriate subset of
@@ -171,8 +216,281 @@ has been discussed in each lineage, and produce this information as a page of ht
 and visualizations, as you see fit. This page should allow me to understand which session to reuse
 for a certain purpose, or which sessions to extract information from, etc.
 
-Build the page from `templates/map-sessions.html` in this skill's directory: copy it, set `<title>`
+Start from the genealogy page of a search for the topic (`agent sessions serve`, above), which
+shows the lineages and the context each session started from. Build the page from
+`templates/map-sessions.html` in this skill's directory: copy it, set `<title>`
 and `<h1>`, and replace the `META`, `PHASES`, `S` and `LINEAGES` data blocks (the comment above them
-gives their shape). Do not change the styling or rendering code. Use `agent-sessions tree` for
-genealogy, and parallel subagents to summarise lineages; for a forked child, summarise only what
+gives their shape). Do not change the styling or rendering code. Use the genealogy page for
+the trees, and parallel subagents to summarise lineages; for a forked child, summarise only what
 happened after the fork. Write the html to the map-sessions/ dir in my log repo.
+
+<!-- Everything below is generated by `make skill` from the commands' help. -->
+
+## `agent` commands
+
+```
+Usage: agent [OPTIONS] [COMMAND] [ARGS]...
+
+  Start agent sessions and run prompts on a chosen model.
+
+  With no subcommand, start an interactive session, passing other options to the model's CLI (e.g.
+  `agent -r`). The model is $AGENT_MODEL if set, else -m MODEL, else chosen with fzf.
+
+Options:
+  -m TEXT         Model name from ~/.config/agent-models.toml.
+  -p, --personal  Use the personal account.
+  --help          Show this message and exit.
+
+Commands:
+  ctx
+    Print an agent's context, built from SOURCES or a RECIPE.toml, as Markdown.
+
+    It starts with a manifest of the sources and their token counts. Every source is included raw;
+    if they exceed --budget, the manifest goes to stderr and nothing is output. Quote a source that
+    has options.
+
+    issue:N | issue:URL | GITHUB_ISSUE_URL         the body and comments (N: log repo)
+    issue:N#issuecomment-ID                        one comment
+    "issue:N exclude=issuecomment-ID,..."          all but those comments
+    session:ID ["--whole"] ["--tools"]             agent-sessions cat (without --whole,
+                                                   only what followed the last compaction)
+    session:ID@POINT                               the session up to that point's turn
+    slack:URL | SLACK_URL                          slack-to-md
+    meeting:QUERY                                  tracecli transcript
+    path:GLOB                                      matching files
+    
+    agent ctx --purpose "implement batch cancel" --budget 80000 issue:212 \
+        session:claude:7e90a7c6 | agent with-input
+    
+    A recipe holds purpose, budget, sources, exclusions, provenance and optionally
+    related_sessions (for agent quiz); relative paths in it are relative to it. Recipes are in ~/src/temporalio-etc/log/recipes.
+    
+    agent ctx ~/src/temporalio-etc/log/recipes/batch-cancel.toml | agent with-input
+
+  from-issues
+    Start an interactive agent with GitHub issues pre-filled in its input.
+
+    agent from-issues [-R OWNER/REPO] [--personal] [-m MODEL] ISSUE... [-- AGENT [ARG...]]
+    ISSUE is a number or URL. Reads ~/.config/agent-from-issues.toml.
+
+  mlx-serve
+    Serve a local MLX model over an OpenAI-compatible API.
+
+    agent mlx-serve [MLX_LM_SERVER_ARG...]
+    Env: MLX_MODEL, MLX_PORT, MLX_MAX_TOKENS.
+
+  new
+    Prepare a session from a description, then start it on Enter.
+
+    agent new [--personal] [-m MODEL] "DESCRIPTION OF THE SESSION"
+    agent new [--personal] [-m MODEL] RECIPE.toml
+    Runs prepare-session and shows its report. Enter starts the session with the
+    recipe's context; typed changes revise the recipe first. Requires tmux.
+
+  overview
+    Open a browser page summarising a RECIPE.toml: purpose, size against the budget, exclusions,
+    provenance, and each source's tokens, headings and a short summary.
+
+    agent overview ~/src/temporalio-etc/log/recipes/batch-cancel.toml
+    The page is written to a temporary directory; its path is printed.
+
+  pick
+    Choose a model ($AGENT_MODEL, else NAME, else fzf) and print it as JSON.
+
+    agent pick [--personal] [--list] [NAME]
+
+  prepare-session
+    Prepare a context recipe for a new session described in plain language.
+
+    agent prepare-session "DESCRIPTION OF THE SESSION"
+    agent prepare-session RECIPE.toml "CHANGES"
+    Each run commits the recipe in the log repo and prints the command that starts
+    the session; it never starts it.
+
+  prices-refresh
+    Cache OpenRouter's model list, used for codex costs.
+
+  quiz
+    Ask a session prepared from RECIPE.toml and an existing session the same questions, and show
+    their answers one after the other.
+
+    agent quiz -m opus ~/src/temporalio-etc/log/recipes/batch-cancel.toml
+    The existing session is chosen with fzf from the recipe's related_sessions, and
+    forked, so it is not changed. Each answer shows what its turn cost.
+
+  run
+    Run a prompt non-interactively; the answer goes to stdout.
+
+    agent run [--personal] [-m MODEL] [--no-tools]                prompt from stdin
+    agent run [--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script
+
+  sessions
+    Find, index and resume past sessions (agent-sessions).
+
+    agent sessions search "conversation history"
+    agent sessions show claude:7e90a7c6 --turns
+    `agent sessions --help` lists its commands.
+
+  start
+    Start an interactive session, passing other arguments to the model's CLI.
+
+    agent start -m opus --resume abc
+
+  with-input
+    Start an interactive agent with its input pre-filled from stdin.
+
+    agent with-input [--personal] [-m MODEL] [--name NAME] [-- AGENT [ARG...]] < FILE
+    Requires tmux. Nothing is submitted.
+```
+
+## `agent sessions` commands
+
+### `agent sessions agent [PROMPT]`
+
+Start a coding agent that already knows this tool.
+
+- `--with` — Which coding agent to start.
+- `--model` — Which model it should run, named as that agent names it.
+
+```
+$ agent-sessions agent                                    # pi, knowing this tool
+$ agent-sessions agent --with qwen
+$ agent-sessions agent --model anthropic/claude-opus-5
+$ agent-sessions agent "pick up the compaction work"      # your own first task
+```
+
+### `agent sessions attend`
+
+Answer prompts left on the control channel, until interrupted.
+
+- `--interval` — Seconds between polls. A poll that finds nothing costs no rate limit.
+- `--once` — One pass, rather than staying up.
+- `--verbose` — Say something on every poll, not just events.
+- `--reset` — Clear the breaker and say what tripped it.
+
+### `agent sessions cat ID[@POINT]`
+
+Print a session as markdown, read from the transcript itself.
+
+- `--tools` — Include tool calls and their output.
+- `--whole` — Include branches that were abandoned.
+- `--last` — Only the most recent turn.
+- `--upto` — Everything up to the end of the point's turn.
+
+```
+$ agent-sessions cat claude:7e90a7c6 --tools         # the whole thing
+$ agent-sessions cat claude:7e90a7c6 --last          # only the turn just had
+$ agent-sessions cat claude:7e90a7c6@9f3c1d20        # only the turn around a point
+$ agent-sessions cat claude:7e90a7c6@9f3c1d20 --upto # everything up to that turn's end
+```
+
+### `agent sessions forget ID`
+
+Take a session out of the index, and its transcript out of the agent's reach.
+
+```
+$ agent-sessions forget claude:7e90a7c6       # by the id Claude prints as it exits
+$ agent-sessions forget 7e90a7c6              # or any unambiguous prefix of it
+```
+
+### `agent sessions issue ID`
+
+Put a session on the control channel, so it can be carried on from anywhere.
+
+```
+$ agent-sessions issue claude:7e90a7c6      # reach it from a phone
+```
+
+### `agent sessions ls`
+
+List sessions, most recent first. No text matching; use `search` for that.
+
+- `-p, --project` — Only these wormhole projects: space-separated globs; a name with no wildcard includes its tasks.
+- `--agent` — Only this agent.
+- `--since` — Only agent-sessions touched within e.g. 36h, 10d, 2w.
+- `--min-context` — Only agent-sessions whose context reached e.g. 500k.
+- `--source` — Only sessions whose context included this source, e.g. issue:413 (any part of the issue). Repeatable: all of them.
+- `--recipe` — Only sessions whose context this recipe built.
+- `--any-source` — Any of the sources and recipe, not all.
+- `-n, --limit` — How many at most.
+- `--sort` — Order by recency, peak context, or number of turns.
+
+### `agent sessions rename ID TITLE`
+
+Give a session a title of my own, in place of the one it was given.
+
+### `agent sessions resume ID[@POINT]`
+
+Pick a session back up, in the worktree it belongs to.
+
+- `--fork` — Branch into a new session, leaving this one as it is.
+- `--remote` — Hand it to the agent's remote control, for a phone.
+
+```
+$ agent-sessions resume claude:7e90a7c6             # where it was left
+$ agent-sessions resume claude:7e90a7c6 --fork      # branch, leaving it as it is
+$ agent-sessions resume claude:7e90a7c6@9f3c1d20    # from a point inside it
+$ agent-sessions resume claude:7e90a7c6 --remote    # to carry on from a phone
+```
+
+### `agent sessions search QUERY`
+
+Find agent-sessions whose text matches QUERY. Best match first, one per line.
+
+- `-p, --project` — Only these wormhole projects: space-separated globs; a name with no wildcard includes its tasks.
+- `--agent` — Only this agent.
+- `--since` — Only agent-sessions touched within e.g. 36h, 10d, 2w.
+- `--min-context` — Only agent-sessions whose context reached e.g. 500k.
+- `--source` — Only sessions whose context included this source, e.g. issue:413 (any part of the issue). Repeatable: all of them.
+- `--recipe` — Only sessions whose context this recipe built.
+- `--any-source` — Any of the sources and recipe, not all.
+- `-n, --limit` — How many at most.
+
+```
+$ agent-sessions search compaction                    # case-insensitive, and stemmed:
+                                                # matches Compaction, compacted
+$ agent-sessions search "worktree relocation"         # both words, in any order
+$ agent-sessions search '"worktree relocation"'       # the exact phrase
+$ agent-sessions search 'nexus OR chasm'              # either
+$ agent-sessions search 'activity NOT workflow'       # one but not the other
+$ agent-sessions search 'reloc*'                      # prefix of the STEM: relocat*
+                                                # would find nothing
+$ agent-sessions search compaction -p temporal --since 2w
+$ agent-sessions search compaction --min-context 500k -n 5
+$ agent-sessions search compaction -q | head -1       # bare id, to pipe
+```
+
+### `agent sessions serve`
+
+Serve the index in a browser, where a link is enough to resume.
+
+- `--port` — Which port to listen on.
+- `--host` — Which address to bind.
+- `--lan` — Serve to the rest of the network, for a phone.
+- `--attend` — Answer the control channel too.
+- `--verbose` — Say something on every poll, not just events.
+- `--open` — Open a browser at it.
+
+### `agent sessions show ID`
+
+Show one session and the history of my turns in it.
+
+- `--turns` — Just my turns, without the header.
+
+### `agent sessions skills`
+
+Manage the agent-sessions skill, so an agent knows this tool from turn one.
+
+### `agent sessions status`
+
+Report index health: session counts, and whether a sync is due.
+
+### `agent sessions sync`
+
+Bring the index into line with the transcript files. Safe to re-run.
+
+- `--agent` — Only read this agent's transcripts. Repeatable. Defaults to all.
+
+### `agent sessions tree ID`
+
+Show where a session branched, where it was compacted, and what forked off it.
