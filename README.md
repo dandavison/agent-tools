@@ -16,7 +16,7 @@ executable prompt scripts, and from the zsh prompt. Specific to my setup.
 | Gather everything on a topic from Slack, Notion, meetings and code | Tell an agent "gather-context on TOPIC" |
 | See what a recipe's context contains | `agent overview RECIPE.toml` |
 | Check a prepared session knows as much as an existing one | `q` in `agent new`, or `agent quiz RECIPE.toml` |
-| Find a past session | `agent-sessions search "QUERY"`, then `agent-sessions show ID --turns` |
+| Find a past session | `agent sessions search "QUERY"`, then `agent sessions show ID --turns` |
 
 Continue a live session while the task is the same and its context is well below the limit.
 Start a new one from the recipe when the purpose changes, the context is large or full of dead
@@ -186,8 +186,9 @@ b -> sources.issues: 13. write back what it learned
 ## Tools
 
 `agent --help` documents every subcommand. Most subcommands run a script in `bin/`, which can
-also be run directly as `agent-<subcommand>`. `agent-sessions`, which finds, indexes and
-resumes past sessions, is in [`sessions/`](sessions/README.md).
+also be run directly as `agent-<subcommand>`. `agent sessions` (also installed as
+`agent-sessions`) finds, indexes and resumes past sessions; [`sessions/`](sessions/README.md)
+documents it.
 
 | | |
 |-|-|
@@ -198,6 +199,7 @@ resumes past sessions, is in [`sessions/`](sessions/README.md).
 | `agent ctx` | Build an agent's context from sources or a recipe within a token budget. No compression yet. |
 | `agent new` | Prepare a session from a description or recipe, and start it on Enter. |
 | `agent prepare-session` | The prompt script that prepares a recipe. |
+| `agent sessions` | Find, index and resume past sessions. |
 | `agent quiz` | Ask a prepared session and an existing one the same questions, side by side. |
 | `agent overview` | Open a browser page summarising a recipe's sources, sizes and exclusions. |
 | `agent with-input` | Start an interactive agent with its input pre-filled from stdin. |

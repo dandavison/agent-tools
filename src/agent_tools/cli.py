@@ -8,6 +8,7 @@ from pathlib import Path
 
 import click
 
+import agent_sessions.cli
 from agent_tools.ctx import OverBudget, SourceError, build, build_recipe
 from agent_tools.overview import write_overview
 from agent_tools.quiz import quiz
@@ -61,6 +62,14 @@ class Script(click.Command):
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         if args == ["--help"]:
             return super().parse_args(ctx, args)
+        ctx.args = args
+        return []
+
+
+class Passthrough(click.Command):
+    """Passes every argument on untouched, --help included."""
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         ctx.args = args
         return []
 
@@ -230,6 +239,19 @@ def quiz_command(recipe: Path, model: str | None, personal: bool) -> None:
         quiz(recipe.absolute(), lambda other: pick_model(model, personal or other))
     except SourceError as e:
         raise click.ClickException(str(e)) from e
+
+
+@cli.command("sessions", cls=Passthrough)
+@click.pass_context
+def sessions_command(ctx: click.Context) -> None:
+    """Find, index and resume past sessions (agent-sessions).
+
+    \b
+    agent sessions search "conversation history"
+    agent sessions show claude:7e90a7c6 --turns
+    `agent sessions --help` lists its commands.
+    """
+    raise SystemExit(agent_sessions.cli.run(ctx.args))
 
 
 def script_command(name: str, help: str) -> click.Command:
