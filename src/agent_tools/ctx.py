@@ -70,6 +70,7 @@ def build(
     budget: int | None,
     exclusions: tuple[Exclusion, ...] = (),
     base: Path = Path(),
+    origin: str = "",
 ) -> str:
     with ThreadPoolExecutor() as pool:
         sources = list(pool.map(lambda uri: Source(uri, resolve(uri, base)), uris))
@@ -79,7 +80,8 @@ def build(
     preamble = f"Purpose: {purpose.strip()}\n\n" if purpose else ""
     sections = "".join(f"## {s.uri}\n\n{demote(s.text, 2)}\n" for s in sources)
     return (
-        f"# Context\n\n{preamble}{format_exclusions(exclusions)}{manifest}\n{sections}"
+        f"# Context\n\n{origin}{preamble}{format_exclusions(exclusions)}{manifest}\n"
+        f"{sections}"
     )
 
 
@@ -91,7 +93,28 @@ def build_recipe(path: Path) -> str:
         recipe.budget,
         recipe.exclusions,
         path.parent,
+        recipe_origin(path),
     )
+
+
+def recipe_origin(path: Path) -> str:
+    """Which recipe and commit built the context, so a session's transcript records it."""
+    git = ["git", "-C", str(path.parent)]
+    status = subprocess.run(
+        [*git, "status", "--porcelain", "--", path.name],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    commit = subprocess.run(
+        [*git, "log", "-1", "--format=%h", "--", path.name],
+        capture_output=True,
+        check=False,
+        text=True,
+    ).stdout.strip()
+    if status.returncode or status.stdout.strip() or not commit:
+        return f"Recipe: {path.absolute()} (not committed)\n\n"
+    return f"Recipe: {path.absolute()} @ {commit}\n\n"
 
 
 def load_recipe(path: Path) -> Recipe:

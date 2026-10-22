@@ -50,7 +50,8 @@ fi
 
 while read -r -p "Enter starts the session; q quizzes it against an existing one; or type changes: " reply; do
     if [[ -z "$reply" ]]; then
-        agent ctx "$recipe" | agent-with-input ${with_input_args[@]+"${with_input_args[@]}"}
+        agent ctx "$recipe" |
+            agent-with-input ${with_input_args[@]+"${with_input_args[@]}"} --name "$(basename "$recipe" .toml)"
         exit
     elif [[ "$reply" == q ]]; then
         agent quiz ${with_input_args[@]+"${with_input_args[@]}"} "$recipe" || true
