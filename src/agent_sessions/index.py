@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_sessions import contexts, db, wormhole
+from agent_sessions import contexts, db, slack, wormhole
 from agent_sessions.sources import Source
 from agent_sessions.sources.claude import ClaudeSource
 
@@ -61,6 +61,7 @@ def sync(conn: sqlite3.Connection, agents: list[str] | None = None) -> SyncResul
             nodes += len(delta.nodes)
 
     forgotten = db.forget(conn, _vanished(conn, seen, sources))
+    _name_slack_channels(conn)
     db.reindex_fts(conn)
     db.set_synced_at(conn, int(time.time()))
     conn.commit()
@@ -71,6 +72,19 @@ def sync(conn: sqlite3.Connection, agents: list[str] | None = None) -> SyncResul
         forgotten=forgotten,
         nodes=nodes,
     )
+
+
+def _name_slack_channels(conn: sqlite3.Connection) -> None:
+    """Ask Slack once for the name of each channel a source is in, and remember the answer."""
+    known = db.slack_channels(conn)
+    wanted = {
+        channel
+        for (uri,) in conn.execute("SELECT DISTINCT identity FROM context_source")
+        if (channel := contexts.slack_channel(uri)) and channel not in known
+    }
+    for workspace in {w for w, _ in wanted}:
+        names = slack.channels(workspace)
+        db.write_slack_channels(conn, [(w, c, names.get(c)) for w, c in wanted if w == workspace])
 
 
 def _vanished(conn: sqlite3.Connection, seen: set[str], sources: list[Source]) -> list[str]:

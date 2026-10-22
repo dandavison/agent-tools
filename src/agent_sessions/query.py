@@ -5,7 +5,8 @@ import sqlite3
 import time
 from dataclasses import dataclass
 
-from agent_sessions.contexts import identity
+from agent_sessions import db
+from agent_sessions.contexts import identity, shown, slack_channel
 
 # Weeks are as long as anyone needs; months and years vary and would need a calendar.
 UNITS = {"h": 3600, "d": 86400, "w": 604800}
@@ -79,13 +80,21 @@ def _used(source: str) -> tuple[str, object]:
     )
 
 
-def sources_used(conn: sqlite3.Connection) -> list[str]:
-    """Every source a context included, and every recipe as `recipe:<name>`."""
+def sources_used(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
+    """Every source a session was given, and every recipe as `recipe:<name>`, with any label.
+
+    Not a Slack thread in a channel whose name is not known: its url means nothing.
+    """
+    channels = db.slack_channels(conn)
     rows = conn.execute(
         "SELECT identity FROM context_source UNION"
         " SELECT 'recipe:' || recipe FROM context_source WHERE recipe IS NOT NULL ORDER BY 1"
     )
-    return [row[0] for row in rows]
+    return [
+        (uri, shown(uri, channels))
+        for (uri,) in rows
+        if not (channel := slack_channel(uri)) or channels.get(channel)
+    ]
 
 
 def _project(pattern: str) -> tuple[str, list[object]]:

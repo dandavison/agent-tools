@@ -9,6 +9,7 @@ number and, since 2026-10-22, its url; without one it is an issue of the log rep
 """
 
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,9 @@ PASTED = re.compile(
 RECIPE = re.compile(r"# Context\n\nRecipe: (?P<path>.+?) (?:@ (?P<commit>\w+)|\(not committed\))\n")
 MANIFEST = re.compile(
     r"^\| source \| included \| tokens \|\n\|-\|-\|-\|\n(?P<rows>(?:\|.*\|\n)*)", re.M
+)
+SLACK_THREAD = re.compile(
+    r"https://(?P<workspace>[^/]+\.slack\.com)/archives/(?P<channel>\w+)/p(?P<ts>\d+)$"
 )
 FRONT_MATTER = re.compile(r"^---\nnumber: (?P<n>\d+)\n(?:url: (?P<url>\S+)\n)?", re.M)
 
@@ -91,6 +95,27 @@ def outside(text: str) -> str:
     """What a message holds besides a context: the issues inside one were not pasted alone."""
     built = parse(text)
     return built.typed if built else text
+
+
+def slack_channel(uri: str) -> tuple[str, str] | None:
+    """The workspace and channel of a Slack thread."""
+    thread = SLACK_THREAD.match(identity(uri))
+    return (thread["workspace"], thread["channel"]) if thread else None
+
+
+def label(uri: str, channel_name: str | None) -> str:
+    """A Slack thread as a person knows it: its channel, and when it started."""
+    thread = SLACK_THREAD.match(identity(uri))
+    if not thread:
+        raise ValueError(f"{uri} is not a Slack thread")
+    started = time.strftime("%Y-%m-%d %H:%M", time.localtime(int(thread["ts"][:-6])))
+    return f"#{channel_name or thread['channel']} · {started}"
+
+
+def shown(uri: str, channels: dict[tuple[str, str], str | None]) -> str | None:
+    """How a source is shown when its uri means nothing to a person; a Slack thread's label."""
+    channel = slack_channel(uri)
+    return label(uri, channels.get(channel)) if channel else None
 
 
 def _given(session_id: str, uuid: str, text: str) -> list[ContextSource]:

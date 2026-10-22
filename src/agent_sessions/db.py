@@ -7,7 +7,7 @@ from pathlib import Path
 from agent_sessions.contexts import ContextSource
 from agent_sessions.models import Compaction, Edge, Node, Session
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 DB_PATH = Path.home() / ".agent-sessions" / "index.db"
 
@@ -96,6 +96,15 @@ CREATE TABLE context_source (
   PRIMARY KEY (session_id, uuid, kind, uri)
 );
 CREATE INDEX context_source_identity ON context_source (identity);
+
+-- The names of the Slack channels of sources, asked of Slack at sync so a page
+-- never has to. A channel I am not in has no name.
+CREATE TABLE slack_channel (
+  workspace TEXT NOT NULL,
+  id        TEXT NOT NULL,
+  name      TEXT,
+  PRIMARY KEY (workspace, id)
+);
 
 CREATE VIRTUAL TABLE node_fts USING fts5 (
   text,
@@ -222,6 +231,19 @@ def write_context_sources(conn: sqlite3.Connection, sources: Iterable[ContextSou
             " (session_id, uuid, kind, uri, identity, recipe) VALUES (?,?,?,?,?,?)",
             rows,
         )
+
+
+def write_slack_channels(
+    conn: sqlite3.Connection, channels: Iterable[tuple[str, str, str | None]]
+) -> None:
+    conn.executemany(
+        "INSERT OR REPLACE INTO slack_channel (workspace, id, name) VALUES (?,?,?)", list(channels)
+    )
+
+
+def slack_channels(conn: sqlite3.Connection) -> dict[tuple[str, str], str | None]:
+    rows = conn.execute("SELECT workspace, id, name FROM slack_channel")
+    return {(row["workspace"], row["id"]): row["name"] for row in rows}
 
 
 def set_title(conn: sqlite3.Connection, session_id: str, title: str) -> None:

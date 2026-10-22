@@ -30,6 +30,7 @@ from pygments.util import ClassNotFound
 from agent_sessions import (
     attend,
     channel,
+    contexts,
     db,
     display,
     genealogy,
@@ -104,9 +105,7 @@ def _sessions(conn: sqlite3.Connection, params: dict[str, str]) -> Response:
         # any page of them.
         found = _found(conn, params, sort, reverse, -1)
     except (ValueError, sqlite3.OperationalError) as e:
-        return _page(
-            "agent-sessions", _controls(params, sort) + _options(conn), _banner(str(e)), status=400
-        )
+        return _page("agent-sessions", _find(conn, params, sort), _banner(str(e)), status=400)
 
     lines = _lineages(conn, found, sort, reverse, ranked=bool(text))
     more, shown = len(lines) > (page + 1) * LIMIT, lines[page * LIMIT : (page + 1) * LIMIT]
@@ -120,7 +119,7 @@ def _sessions(conn: sqlite3.Connection, params: dict[str, str]) -> Response:
     )
     return _page(
         "agent-sessions",
-        _controls(params, sort) + _options(conn),
+        _find(conn, params, sort),
         _flash(params),
         _forest_link(params) if found else "",
         body,
@@ -287,7 +286,7 @@ def _session(conn: sqlite3.Connection, id: str, params: dict[str, str]) -> Respo
     )
     return _page(
         session["title"] or session["id"],
-        _controls(params, "recent") + _options(conn),
+        _find(conn, params, "recent"),
         _flash(params),
         f"<h1>{_h(session['title'] or session['id'])}</h1>",
         f"<p class=actions>{_actions(session['id'])}"
@@ -617,7 +616,13 @@ def _page(title: str, *sections: str, status: int = 200) -> Response:
     )
 
 
-def _controls(params: dict[str, str], sort: str) -> str:
+def _find(conn: sqlite3.Connection, params: dict[str, str], sort: str) -> str:
+    return _controls(params, sort, db.slack_channels(conn)) + _options(conn)
+
+
+def _controls(
+    params: dict[str, str], sort: str, channels: dict[tuple[str, str], str | None]
+) -> str:
     """The search form, on every page, carrying whatever filters are in force.
 
     The order is chosen by clicking a column, so it travels as a hidden field
@@ -640,12 +645,12 @@ def _controls(params: dict[str, str], sort: str) -> str:
         f"<input name=since placeholder=since value='{_h(params.get('since', ''))}' size=6>"
         f"{order}"
         "<button type=submit>find</button>"
-        f"{_chosen(params)}"
+        f"{_chosen(params, channels)}"
         "</form>"
     )
 
 
-def _chosen(params: dict[str, str]) -> str:
+def _chosen(params: dict[str, str], channels: dict[tuple[str, str], str | None]) -> str:
     """The sources in force, each a chip that removes itself, and whether all or any must match.
 
     Each rides along as a hidden field, so typing another into the box adds to them.
@@ -656,7 +661,8 @@ def _chosen(params: dict[str, str]) -> str:
     carried = {k: v for k, v in params.items() if k in CARRIED and v}
     chips = "".join(
         f"<input type=hidden name=source value='{_h(s)}'>"
-        f"<span class=chip>{_h(s)}<a href='{_listing(carried, source=_dropped(chosen, s))}'"
+        f"<span class=chip>{_h(contexts.shown(s, channels) or s)}"
+        f"<a href='{_listing(carried, source=_dropped(chosen, s))}'"
         " aria-label='remove'>×</a></span>"
         for s in chosen
     )
@@ -687,7 +693,10 @@ def _listing(carried: dict[str, str], **changed: str) -> str:
 
 def _options(conn: sqlite3.Connection) -> str:
     """What the project and source boxes offer."""
-    sources = "".join(f"<option value='{_h(s)}'>" for s in query.sources_used(conn))
+    sources = "".join(
+        f"<option value='{_h(uri)}'" + (f" label='{_h(label)}'>" if label else ">")
+        for uri, label in query.sources_used(conn)
+    )
     return _projects(conn) + f"<datalist id=sources>{sources}</datalist>"
 
 
@@ -799,7 +808,7 @@ def _running() -> set[str]:
 
 
 def _error(status: int, message: str) -> Response:
-    return _page("agent-sessions", _controls({}, "recent"), _banner(message), status=status)
+    return _page("agent-sessions", _controls({}, "recent", {}), _banner(message), status=status)
 
 
 def _redirect(location: str) -> Response:

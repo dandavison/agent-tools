@@ -172,7 +172,7 @@ function Context({ c }) {
       <div class="chips">
         ${c.sources.map((s) => html`
           <span class="chip" key=${s.uri} title=${s.uri}>
-            <a class="nodrag" href=${s.list} title="sessions built from this">${sourceLabel(s.uri)}</a>
+            <a class="nodrag" href=${s.list} title="sessions built from this">${s.label || sourceLabel(s.uri)}</a>
             <span class="n">${tokens(s.tokens)}</span>
             ${s.url ? html`<a class="out nodrag" href=${s.url} title=${s.url}>↗</a>` : null}
           </span>`)}

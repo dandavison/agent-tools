@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlencode
 
-from agent_sessions import contexts
+from agent_sessions import contexts, db
 from agent_tools.overview import SLACK, issue_url, wormhole_url
 
 # Messages the harness writes in the user's place.
@@ -107,7 +107,17 @@ def _nodes(
 ) -> list[dict]:
     merged = _merge(conn, _sessions(conn, ids), forked_from, selected)
     roots = _order(merged, [u for u in merged.steps if u not in merged.parent])
-    return [seg for root in roots for seg in _segments(merged, root, None, root)]
+    nodes = [seg for root in roots for seg in _segments(merged, root, None, root)]
+    _label(nodes, db.slack_channels(conn))
+    return nodes
+
+
+def _label(nodes: list[dict], channels: dict[tuple[str, str], str | None]) -> None:
+    """Name each context source whose uri means nothing to a person."""
+    for node in nodes:
+        for item in node["items"]:
+            for source in item.get("sources", []):
+                source["label"] = contexts.shown(source["uri"], channels)
 
 
 def _joining(selected: set[str], forked_from: dict[str, str]) -> set[str]:
