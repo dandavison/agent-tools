@@ -35,6 +35,7 @@ WRAPPED = [
     "prices-refresh",
     "mlx-serve",
     "prepare-session",
+    "new",
 ]
 
 
