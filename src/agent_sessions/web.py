@@ -631,7 +631,7 @@ def _controls(params: dict[str, str], sort: str) -> str:
         "<form class=controls action=/ method=get>"
         f"<a class=brand href=/>{MARK}agent-sessions</a>"
         f"<input name=q placeholder='what was said' value='{_h(params.get('q', ''))}'>"
-        f"<input name=project placeholder='projects (globs, space-separated)' list=projects"
+        f"<input name=project placeholder=projects list=projects"
         f" value='{_h(params.get('project', ''))}'>"
         f"<input name=since placeholder=since value='{_h(params.get('since', ''))}' size=6>"
         f"{order}"
