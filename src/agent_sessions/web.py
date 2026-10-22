@@ -16,6 +16,7 @@ import sqlite3
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 import httpx
@@ -98,17 +99,18 @@ def _sessions(conn: sqlite3.Connection, params: dict[str, str]) -> Response:
     page = _page_number(params)
     text = params.get("q", "").strip()
     try:
-        # One more than fits, which is how the next page is known to exist
-        # without counting the whole table.
-        found = _found(conn, params, sort, reverse, LIMIT + 1, page * LIMIT)
+        # Every match, because a lineage is ordered by sessions that may be on
+        # any page of them.
+        found = _found(conn, params, sort, reverse, -1)
     except (ValueError, sqlite3.OperationalError) as e:
         return _page(
             "agent-sessions", _controls(params, sort) + _projects(conn), _banner(str(e)), status=400
         )
 
-    more, found = len(found) > LIMIT, found[:LIMIT]
+    lines = _lineages(conn, found, sort, reverse, ranked=bool(text))
+    more, shown = len(lines) > (page + 1) * LIMIT, lines[page * LIMIT : (page + 1) * LIMIT]
     live = _running()
-    rows = "".join(_session_row(s, text, live) for s in found)
+    rows = "".join(_lineage_row(line, text, live) for line in shown)
     body = (
         f"<table><thead><tr>{_headings(params, sort, reverse, sortable=not text)}"
         f"<th class=right></tr></thead><tbody>{rows}</tbody></table>"
@@ -121,7 +123,7 @@ def _sessions(conn: sqlite3.Connection, params: dict[str, str]) -> Response:
         _flash(params),
         _forest_link(params) if found else "",
         body,
-        _pager(params, page, len(found), more),
+        _pager(params, page, len(shown), more),
         _footer(conn),
     )
 
@@ -161,20 +163,86 @@ def _page_number(params: dict[str, str]) -> int:
     return int(page) if page.isdigit() else 0
 
 
+def _lineages(
+    conn: sqlite3.Connection, found: list[dict], sort: str, reverse: bool, ranked: bool
+) -> list[dict]:
+    """The lineages holding what was found: by best match when searching, else by `sort`."""
+    rank = {s["id"]: i for i, s in enumerate(found)}
+    groups = genealogy.lineages(conn, set(rank))
+    known = query.by_ids(conn, set().union(*groups))
+    lines = []
+    for group in groups:
+        held = [known[s] for s in group if s in known]
+        lines.append(
+            {
+                "latest": max(held, key=lambda s: s["ended_at"] or 0),
+                "held": len(held),
+                "matched": sorted(
+                    (found[rank[s]] for s in group if s in rank), key=lambda s: rank[s["id"]]
+                ),
+                "context_tokens": max(s["context_tokens"] for s in held),
+                "ids": set(group),
+            }
+        )
+    if ranked:
+        return sorted(lines, key=lambda line: rank[line["matched"][0]["id"]])
+    return _ordered(lines, sort, reverse)
+
+
+def _ordered(lines: list[dict], sort: str, reverse: bool) -> list[dict]:
+    """As `query.order_by` orders sessions, by the lineage's largest context or its latest."""
+
+    def value(line: dict) -> Any:
+        return line["context_tokens"] if sort == "context" else line["latest"][query.SORTS[sort]]
+
+    descending = (sort not in query.ASCENDING) != reverse
+    present = sorted((x for x in lines if value(x) is not None), key=value, reverse=descending)
+    return present + [x for x in lines if value(x) is None]
+
+
+def _lineage_row(line: dict, text: str, live: set[str]) -> str:
+    """A lineage of one session is that session; of more, its latest, linking to them all."""
+    if line["held"] == 1:
+        return _session_row(line["matched"][0], text, live)
+    latest, matched = line["latest"], len(line["matched"])
+    counted = display.plural(line["held"], "session") + (
+        f", {matched} matched" if matched < line["held"] else ""
+    )
+    return _row(
+        latest,
+        f"/genealogy/{quote(latest['id'], safe=':')}",
+        display.tokens(line["context_tokens"]),
+        f" <span class=lineage>{counted}</span>",
+        bool(line["ids"] & live),
+        line["matched"][0].get("snippet") if text else None,
+        text,
+    )
+
+
 def _session_row(s: dict, text: str, live: set[str]) -> str:
+    return _row(
+        s,
+        _link(s["id"]),
+        display.tokens(s["context_tokens"]),
+        "",
+        s["id"] in live,
+        s.get("snippet") if text else None,
+        text,
+    )
+
+
+def _row(
+    s: dict, href: str, context: str, counted: str, running: bool, snippet: str | None, text: str
+) -> str:
     r = display.row(s)
     title = r["title"] or s["id"]
-    note = (
-        f"<div class=snippet>{_h(display.snippet(s['snippet'], text))}</div>"
-        if text and s.get("snippet")
-        else ""
-    )
+    note = f"<div class=snippet>{_h(display.snippet(snippet, text))}</div>" if snippet else ""
     project = _project(r["project"])
-    dot = "<span class=live title='running now'>●</span>" if s["id"] in live else ""
+    dot = "<span class=live title='running now'>●</span>" if running else ""
     return (
-        f"<tr><td class=when>{_h(r['when'])}<td>{project}<td class=num>{_h(r['context'])}"
+        f"<tr><td class=when>{_h(r['when'])}<td>{project}<td class=num>{_h(context)}"
         f"<td class=num>{r['turns']}"
-        f"<td><a href='{_link(s['id'])}'>{_h(title)}</a>{dot}{note}"
+        f"<td><a href='{href}'>{_h(title)}</a>{counted}{dot}{note}"
         f"<td class=right>{_actions(s['id'])}</tr>"
     )
 
@@ -818,6 +886,7 @@ tbody tr:hover { background: color-mix(in oklab, var(--fg) 4%, transparent) }
 .quiet { color: var(--dim) }
 .none { color: var(--dim) }
 .snippet { color: var(--dim); margin-top: 3px; font-size: 13px }
+.lineage { color: var(--dim); font-size: 13px }
 .live { color: var(--live); margin-left: 6px }
 .button { display: inline-block; padding: 3px 9px; border: 1px solid var(--line);
           border-radius: 6px; font-size: 13px; white-space: nowrap }

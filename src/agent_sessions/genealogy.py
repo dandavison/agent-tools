@@ -34,7 +34,7 @@ MANIFEST = re.compile(
 # Messages the harness writes in the user's place.
 HARNESS = re.compile(
     r"\s*<(task-notification|local-command-stdout|local-command-caveat|system-reminder"
-    r"|bash-input|bash-stdout)>"
+    r"|bash-input|bash-stdout|ide_opened_file)>"
 )
 COMMAND = re.compile(r"\s*<command-")
 COMMAND_NAME = re.compile(r"<command-name>(.*?)</command-name>", re.S)
@@ -97,6 +97,17 @@ def _sessions(conn: sqlite3.Connection, ids: set[str]) -> dict[str, dict]:
             list(ids),
         )
     }
+
+
+def lineages(conn: sqlite3.Connection, ids: set[str]) -> list[frozenset[str]]:
+    """The lineages these sessions are in: each one and every session joined to it by forks."""
+    forked_from = _lineage(conn, ids)
+    group = {s: frozenset({s}) for s in ids | forked_from.keys() | set(forked_from.values())}
+    for child, parent in forked_from.items():
+        joined = group[child] | group[parent]
+        for s in joined:
+            group[s] = joined
+    return list(set(group.values()))
 
 
 def _nodes(

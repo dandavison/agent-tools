@@ -204,6 +204,13 @@ def get(conn: sqlite3.Connection, id: str) -> dict | None:
     return dict(rows[0])
 
 
+def by_ids(conn: sqlite3.Connection, ids: set[str]) -> dict[str, dict]:
+    rows = conn.execute(
+        f"SELECT {COLUMNS} FROM session WHERE id IN ({','.join('?' * len(ids))})", list(ids)
+    )
+    return {row["id"]: dict(row) for row in rows}
+
+
 def split_point(id: str) -> tuple[str, str]:
     """`<session>@<point>`: which session, and where in it to pick up."""
     session, _, at = id.partition("@")
