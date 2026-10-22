@@ -18,7 +18,10 @@ executable prompt scripts, and from the zsh prompt. Specific to my setup.
 | Check a prepared session knows as much as an existing one | `q` in `agent new`, or `agent quiz RECIPE.toml` |
 | Find a past session | `agent-sessions search "QUERY"`, then `agent-sessions show ID --turns` |
 
-Never resume a session: start a new one from its recipe, which picks up what was written back.
+Continue a live session while the task is the same and its context is well below the limit.
+Start a new one from the recipe when the purpose changes, the context is large or full of dead
+ends, or the session has sat idle. Don't revive an idle session for a new purpose, and write
+back before leaving a session.
 
 ## Examples
 
