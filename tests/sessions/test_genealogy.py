@@ -1,5 +1,6 @@
 """Sessions that forked from one another, each with the context it was started from."""
 
+import time
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -15,6 +16,7 @@ CHILD = "claude:22222222-0000-0000-0000-000000000000"
 UNRELATED = "claude:33333333-0000-0000-0000-000000000000"
 RECIPE = "/Users/dan/src/temporalio-etc/log/recipes/streams-implementer.toml"
 SLACK = "https://temporaltechnologies.slack.com/archives/C08JS3TU4AW/p1792510188624239"
+THREAD_STARTED = time.strftime("%Y-%m-%d %H:%M", time.localtime(1792510188))
 MANIFEST = (
     "| source | included | tokens |\n|-|-|-|\n"
     "| issue:412 exclude=issuecomment-6236552071 | raw | 21308 |\n"
@@ -150,14 +152,22 @@ def test_the_context_a_session_was_started_from_is_one_block_of_its_sources(conn
                 "tokens": 21308,
                 "url": "https://github.com/temporalio/dandavison-log/issues/412",
                 "list": "/?source=issue%3A412",
+                "label": None,
             },
             {
                 "uri": SLACK,
                 "tokens": 900,
                 "url": SLACK,
                 "list": f"/?{urlencode({'source': SLACK})}",
+                "label": f"#C08JS3TU4AW · {THREAD_STARTED}",
             },
-            {"uri": "path:notes.md", "tokens": 40, "url": None, "list": "/?source=path%3Anotes.md"},
+            {
+                "uri": "path:notes.md",
+                "tokens": 40,
+                "url": None,
+                "list": "/?source=path%3Anotes.md",
+                "label": None,
+            },
         ],
     }
     assert typed == {
@@ -440,3 +450,37 @@ def test_an_issue_pasted_into_a_turn_is_shown_at_that_turn() -> None:
     text = 'Read this:\n---\nnumber: 395\ndate: 2026-09-30\ntitle: "History"\n---\n\nBody.'
     [turn] = genealogy.said("u9", 100, text)
     assert turn["issues"] == [{"uri": "issue:395", "list": "/?source=issue%3A395"}]
+
+
+def named(conn) -> None:
+    """The channel of the Slack thread, as sync caches it."""
+    db.write_slack_channels(
+        conn, [("temporaltechnologies.slack.com", "C08JS3TU4AW", "crew-operator-commands")]
+    )
+    conn.commit()
+
+
+def test_a_slack_source_is_labelled_by_its_channel_and_when_the_thread_started(conn) -> None:
+    named(conn)
+    sources = genealogy.of(conn, PARENT)["nodes"][0]["items"][0]["sources"]
+    assert sources[1]["label"] == f"#crew-operator-commands · {THREAD_STARTED}"
+
+
+def test_a_slack_source_chosen_is_a_chip_of_its_label(listed) -> None:
+    named(listed)
+    body = web.handle("/", urlencode({"source": SLACK})).body
+    assert f"<span class=chip>#crew-operator-commands · {THREAD_STARTED}<a" in body
+
+
+def test_a_slack_source_is_offered_by_its_label(listed) -> None:
+    named(listed)
+    db.write_context_sources(listed, [ContextSource(UNRELATED, "x1", "context", SLACK, None)])
+    listed.commit()
+    body = web.handle("/").body
+    assert f"<option value='{SLACK}' label='#crew-operator-commands · {THREAD_STARTED}'>" in body
+
+
+def test_a_slack_source_whose_channel_is_unknown_is_not_offered(listed) -> None:
+    db.write_context_sources(listed, [ContextSource(UNRELATED, "x1", "context", SLACK, None)])
+    listed.commit()
+    assert SLACK not in web.handle("/").body

@@ -6,7 +6,7 @@ import orjson
 import pytest
 from conftest import assistant, last_prompt, text_block, user
 
-from agent_sessions import db, index, query, wormhole
+from agent_sessions import db, index, query, slack, wormhole
 from agent_sessions.sources.claude import ClaudeSource
 
 SESSION = "7e90a7c6-ce43-4dfd-9d7c-8eb01ac7ccf2"
@@ -315,3 +315,37 @@ def test_sync_records_an_issue_pasted_at_any_turn(projects: Path, tmp_path: Path
     index.sync(conn)
     rows = conn.execute("SELECT uuid, kind, uri FROM context_source").fetchall()
     assert [tuple(r) for r in rows] == [("u2", "pasted", "issue:395")]
+
+
+THREAD = "https://temporaltechnologies.slack.com/archives/C08JS3TU4AW/p1791826899053549"
+
+
+def slack_context() -> str:
+    return (
+        '<pasted_content id="ab12">\n# Context\n\n'
+        "| source | included | tokens |\n|-|-|-|\n"
+        f"| slack:{THREAD} | raw | 9 |\n"
+        "| https://x.slack.com/archives/C2/p1791826899053549 | raw | 9 |\n"
+        '\n</pasted_content id="ab12">'
+    )
+
+
+def test_sync_names_the_slack_channels_of_sources_once(
+    projects: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[str] = []
+
+    def channels(workspace: str) -> dict[str, str]:
+        asked.append(workspace)
+        return {"C08JS3TU4AW": "crew-operator-commands", "C9": "other"}
+
+    monkeypatch.setattr(slack, "channels", channels)
+    write(projects, conversation(slack_context()))
+    conn = db.connect(tmp_path / "index.db")
+    index.sync(conn)
+    index.sync(conn)
+    assert sorted(asked) == ["temporaltechnologies.slack.com", "x.slack.com"]
+    assert db.slack_channels(conn) == {
+        ("temporaltechnologies.slack.com", "C08JS3TU4AW"): "crew-operator-commands",
+        ("x.slack.com", "C2"): None,
+    }

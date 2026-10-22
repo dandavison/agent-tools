@@ -1,5 +1,6 @@
 """What a session was started from, read from the context `agent with-input` pasted into it."""
 
+import time
 from pathlib import Path
 
 import pytest
@@ -99,3 +100,22 @@ def test_a_session_used_its_context_sources_and_the_issues_pasted_into_it() -> N
 def test_the_issues_inside_a_context_were_not_pasted_on_their_own() -> None:
     inside = TEXT.replace("Body.", issue(413))
     assert [s.kind for s in contexts.used("s", [("u1", inside)])] == ["context"] * 3
+
+
+THREAD = "https://temporaltechnologies.slack.com/archives/C08JS3TU4AW/p1791826899053549"
+STARTED = time.strftime("%Y-%m-%d %H:%M", time.localtime(1791826899))
+
+
+def test_a_slack_thread_is_in_a_channel_of_a_workspace() -> None:
+    assert contexts.slack_channel(THREAD) == ("temporaltechnologies.slack.com", "C08JS3TU4AW")
+    assert contexts.slack_channel("issue:413") is None
+
+
+def test_a_slack_thread_is_labelled_by_its_channel_and_start() -> None:
+    assert (
+        contexts.label(THREAD, "crew-operator-commands") == f"#crew-operator-commands · {STARTED}"
+    )
+
+
+def test_a_slack_thread_in_a_channel_not_known_is_labelled_by_the_channel_id() -> None:
+    assert contexts.label(THREAD, None) == f"#C08JS3TU4AW · {STARTED}"

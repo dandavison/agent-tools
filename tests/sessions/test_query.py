@@ -166,10 +166,10 @@ def test_a_recipe_is_a_source_by_its_name(conn) -> None:
 def test_the_sources_known_are_offered_with_the_recipes(conn) -> None:
     used(conn)
     assert query.sources_used(conn) == [
-        "https://github.com/temporalio/temporal/issues/413",
-        "issue:413",
-        "issue:4130",
-        "recipe:moe-code-expert",
+        ("https://github.com/temporalio/temporal/issues/413", None),
+        ("issue:413", None),
+        ("issue:4130", None),
+        ("recipe:moe-code-expert", None),
     ]
 
 
