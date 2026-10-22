@@ -4,9 +4,10 @@ import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
 
+from agent_sessions.contexts import ContextSource
 from agent_sessions.models import Compaction, Edge, Node, Session
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 DB_PATH = Path.home() / ".agent-sessions" / "index.db"
 
@@ -81,6 +82,17 @@ CREATE TABLE compaction (
   PRIMARY KEY (session_id, uuid)
 );
 CREATE INDEX compaction_session ON compaction (session_id);
+
+-- The sources of the contexts a session was given, each with the issue or
+-- thread it is part of, which is what a search for the source matches.
+CREATE TABLE context_source (
+  session_id TEXT NOT NULL REFERENCES session (id) ON DELETE CASCADE,
+  uri        TEXT NOT NULL,
+  identity   TEXT NOT NULL,
+  recipe     TEXT,
+  PRIMARY KEY (session_id, uri)
+);
+CREATE INDEX context_source_identity ON context_source (identity);
 
 CREATE VIRTUAL TABLE node_fts USING fts5 (
   text,
@@ -199,6 +211,16 @@ def write_compactions(conn: sqlite3.Connection, compactions: Iterable[Compaction
         )
 
 
+def write_context_sources(conn: sqlite3.Connection, sources: Iterable[ContextSource]) -> None:
+    rows = [(s.session_id, s.uri, s.identity, s.recipe) for s in sources]
+    if rows:
+        conn.executemany(
+            "INSERT OR REPLACE INTO context_source (session_id, uri, identity, recipe)"
+            " VALUES (?,?,?,?)",
+            rows,
+        )
+
+
 def set_title(conn: sqlite3.Connection, session_id: str, title: str) -> None:
     """What the next sync will read from the transcript anyway, visible now."""
     conn.execute("UPDATE session SET title = ? WHERE id = ?", (title, session_id))
@@ -211,6 +233,7 @@ def forget(conn: sqlite3.Connection, session_ids: Iterable[str]) -> int:
         return 0
     conn.executemany("DELETE FROM node WHERE session_id = ?", ids)
     conn.executemany("DELETE FROM compaction WHERE session_id = ?", ids)
+    conn.executemany("DELETE FROM context_source WHERE session_id = ?", ids)
     conn.executemany(
         "DELETE FROM session_edge WHERE child = ? OR parent = ?", [(i, i) for (i,) in ids]
     )

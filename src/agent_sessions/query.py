@@ -5,6 +5,8 @@ import sqlite3
 import time
 from dataclasses import dataclass
 
+from agent_sessions.contexts import identity
+
 # Weeks are as long as anyone needs; months and years vary and would need a calendar.
 UNITS = {"h": 3600, "d": 86400, "w": 604800}
 
@@ -41,6 +43,8 @@ class Filters:
     agent: str | None = None
     since: str | None = None
     min_context: str | None = None
+    source: str | None = None
+    any_source: bool = False
 
     def where(self) -> tuple[str, list[object]]:
         clauses, values = [], []
@@ -48,6 +52,10 @@ class Filters:
             projects = [_project(p) for p in self.project.split()]
             clauses.append(f"({' OR '.join(c for c, _ in projects)})")
             values += [v for _, vs in projects for v in vs]
+        if self.source:
+            used = [_used(s) for s in self.source.split()]
+            clauses.append(f"({(' OR ' if self.any_source else ' AND ').join(c for c, _ in used)})")
+            values += [v for _, v in used]
         if self.agent:
             clauses.append("agent = ?")
             values.append(self.agent)
@@ -58,6 +66,26 @@ class Filters:
             clauses.append("context_tokens >= ?")
             values.append(parse_count(self.min_context))
         return (" AND ".join(clauses) or "1", values)
+
+
+def _used(source: str) -> tuple[str, object]:
+    """A source a session's context included, or `recipe:<name>`, the recipe that built it."""
+    recipe = source.removeprefix("recipe:")
+    column, value = ("recipe", recipe) if recipe != source else ("identity", identity(source))
+    return (
+        f"EXISTS (SELECT 1 FROM context_source c WHERE c.session_id = session.id"
+        f" AND c.{column} = ?)",
+        value,
+    )
+
+
+def sources_used(conn: sqlite3.Connection) -> list[str]:
+    """Every source a context included, and every recipe as `recipe:<name>`."""
+    rows = conn.execute(
+        "SELECT identity FROM context_source UNION"
+        " SELECT 'recipe:' || recipe FROM context_source WHERE recipe IS NOT NULL ORDER BY 1"
+    )
+    return [row[0] for row in rows]
 
 
 def _project(pattern: str) -> tuple[str, list[object]]:

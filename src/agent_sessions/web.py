@@ -60,7 +60,8 @@ class Response:
 
 def handle(path: str, query_string: str = "") -> Response:
     """Route one request. The only entry point; the server below is plumbing."""
-    params = {k: v[0] for k, v in parse_qs(query_string).items()}
+    # A repeated parameter is a list, which is how a form carries each source chosen.
+    params = {k: " ".join(v) for k, v in parse_qs(query_string).items()}
     conn = db.connect()
     try:
         if path == "/":
@@ -104,7 +105,7 @@ def _sessions(conn: sqlite3.Connection, params: dict[str, str]) -> Response:
         found = _found(conn, params, sort, reverse, -1)
     except (ValueError, sqlite3.OperationalError) as e:
         return _page(
-            "agent-sessions", _controls(params, sort) + _projects(conn), _banner(str(e)), status=400
+            "agent-sessions", _controls(params, sort) + _options(conn), _banner(str(e)), status=400
         )
 
     lines = _lineages(conn, found, sort, reverse, ranked=bool(text))
@@ -119,7 +120,7 @@ def _sessions(conn: sqlite3.Connection, params: dict[str, str]) -> Response:
     )
     return _page(
         "agent-sessions",
-        _controls(params, sort) + _projects(conn),
+        _controls(params, sort) + _options(conn),
         _flash(params),
         _forest_link(params) if found else "",
         body,
@@ -143,6 +144,8 @@ def _found(
         agent=params.get("agent") or None,
         since=params.get("since") or None,
         min_context=params.get("min_context") or None,
+        source=params.get("source") or None,
+        any_source=params.get("sources") == "any",
     )
     if text:
         return query.search(conn, text, filters, limit, offset)
@@ -284,7 +287,7 @@ def _session(conn: sqlite3.Connection, id: str, params: dict[str, str]) -> Respo
     )
     return _page(
         session["title"] or session["id"],
-        _controls(params, "recent") + _projects(conn),
+        _controls(params, "recent") + _options(conn),
         _flash(params),
         f"<h1>{_h(session['title'] or session['id'])}</h1>",
         f"<p class=actions>{_actions(session['id'])}"
@@ -633,11 +636,59 @@ def _controls(params: dict[str, str], sort: str) -> str:
         f"<input name=q placeholder='what was said' value='{_h(params.get('q', ''))}'>"
         f"<input name=project placeholder=projects list=projects"
         f" value='{_h(params.get('project', ''))}'>"
+        f"<input name=source placeholder=sources list=sources>"
         f"<input name=since placeholder=since value='{_h(params.get('since', ''))}' size=6>"
         f"{order}"
         "<button type=submit>find</button>"
+        f"{_chosen(params)}"
         "</form>"
     )
+
+
+def _chosen(params: dict[str, str]) -> str:
+    """The sources in force, each a chip that removes itself, and whether all or any must match.
+
+    Each rides along as a hidden field, so typing another into the box adds to them.
+    """
+    chosen = params.get("source", "").split()
+    if not chosen:
+        return ""
+    carried = {k: v for k, v in params.items() if k in CARRIED and v}
+    chips = "".join(
+        f"<input type=hidden name=source value='{_h(s)}'>"
+        f"<span class=chip>{_h(s)}<a href='{_listing(carried, source=_dropped(chosen, s))}'"
+        " aria-label='remove'>×</a></span>"
+        for s in chosen
+    )
+    return f"<div class=chosen>{chips}{_all_or_any(carried) if len(chosen) > 1 else ''}</div>"
+
+
+def _all_or_any(carried: dict[str, str]) -> str:
+    if carried.get("sources") == "any":
+        return (
+            "<input type=hidden name=sources value=any>"
+            f"<span class=toggle><a href='{_listing(carried, sources='')}'>all</a>"
+            " <b>any</b></span>"
+        )
+    return (
+        f"<span class=toggle><b>all</b> <a href='{_listing(carried, sources='any')}'>any</a></span>"
+    )
+
+
+def _dropped(chosen: list[str], source: str) -> str:
+    return " ".join(s for s in chosen if s != source)
+
+
+def _listing(carried: dict[str, str], **changed: str) -> str:
+    """The list with some filters changed, an empty one dropped."""
+    wanted = {k: v for k, v in (carried | changed).items() if v}
+    return f"/?{_h(urlencode(wanted))}"
+
+
+def _options(conn: sqlite3.Connection) -> str:
+    """What the project and source boxes offer."""
+    sources = "".join(f"<option value='{_h(s)}'>" for s in query.sources_used(conn))
+    return _projects(conn) + f"<datalist id=sources>{sources}</datalist>"
 
 
 def _projects(conn: sqlite3.Connection) -> str:
@@ -659,7 +710,7 @@ HEADINGS = (
 
 # What a link out of this page carries with it. Not `page`: a new order or a new
 # filter starts again from the top.
-CARRIED = ("q", "project", "since", "agent", "min_context")
+CARRIED = ("q", "project", "source", "sources", "since", "agent", "min_context")
 
 
 def _headings(params: dict[str, str], sort: str, reverse: bool, sortable: bool) -> str:
@@ -865,6 +916,11 @@ a:hover { text-decoration: underline }
 h1 { font-size: 20px; margin: 24px 0 8px }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
      margin: 32px 0 8px; font-weight: 600 }
+.chosen { flex-basis: 100%; display: flex; gap: 6px; align-items: center; flex-wrap: wrap }
+.chosen .chip { font-size: 13px; border: 1px solid var(--line); border-radius: 6px;
+                padding: 1px 4px 1px 8px }
+.chosen .chip a { margin-left: 4px; color: var(--dim) }
+.toggle { color: var(--dim); font-size: 13px; margin-left: 6px }
 .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
             padding: 14px 0; border-bottom: 1px solid var(--line); margin-bottom: 4px }
 .brand { font-weight: 600; color: var(--fg); margin-right: 8px;

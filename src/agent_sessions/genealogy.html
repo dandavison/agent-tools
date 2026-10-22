@@ -119,7 +119,7 @@ a:hover { text-decoration: underline; }
   padding: 1px 6px; border-radius: 6px;
   background: var(--card-2); border: 1px solid var(--line); color: var(--text);
 }
-a.chip { color: var(--link); }
+.chip .out { margin-left: 4px; color: var(--muted); }
 .chip .n { color: var(--muted); margin-left: 5px; }
 .context .total { margin-top: 6px; color: var(--muted); font-size: 12px; }
 .loading { height: 100%; display: grid; place-items: center; color: var(--muted); }
@@ -167,12 +167,12 @@ function Context({ c }) {
         ${c.recipe ? html`<span class="commit mono">${c.commit ? `@ ${c.commit}` : "not committed"}</span>` : null}
       </div>
       <div class="chips">
-        ${c.sources.map((s) => {
-          const inner = html`${sourceLabel(s.uri)}<span class="n">${tokens(s.tokens)}</span>`;
-          return s.url
-            ? html`<a class="chip nodrag" key=${s.uri} href=${s.url} title=${s.uri}>${inner}</a>`
-            : html`<span class="chip" key=${s.uri} title=${s.uri}>${inner}</span>`;
-        })}
+        ${c.sources.map((s) => html`
+          <span class="chip" key=${s.uri} title=${s.uri}>
+            <a class="nodrag" href=${s.list} title="sessions built from this">${sourceLabel(s.uri)}</a>
+            <span class="n">${tokens(s.tokens)}</span>
+            ${s.url ? html`<a class="out nodrag" href=${s.url} title=${s.url}>↗</a>` : null}
+          </span>`)}
       </div>
       <div class="total">${tokens(total)} tokens</div>
     </div>`;

@@ -7,30 +7,18 @@ in common. Turns rather than records, because a copy does not always link its
 silent records (tool calls, attachments) the way the original did. Each session
 contributes its live thread only, so a branch rewound within a session is not
 shown.
-
-A context is what `agent ctx` built and `agent with-input` pasted, which Claude
-records as the whole text inside `<pasted_content>`.
 """
 
 import re
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
+from agent_sessions import contexts
 from agent_tools.overview import SLACK, issue_url, wormhole_url
 
-# `agent with-input` follows the paste with a `--` line, after which the cursor is left.
-CONTEXT = re.compile(
-    r'\s*<pasted_content id="(?P<id>[^"]*)">\n(?P<context># Context\n.*?)'
-    r'</pasted_content id="(?P=id)">\s*(?:--(?:\n|$))?(?P<typed>.*)',
-    re.S,
-)
-RECIPE = re.compile(r"# Context\n\nRecipe: (?P<path>.+?) (?:@ (?P<commit>\w+)|\(not committed\))\n")
-MANIFEST = re.compile(
-    r"^\| source \| included \| tokens \|\n\|-\|-\|-\|\n(?P<rows>(?:\|.*\|\n)*)", re.M
-)
 # Messages the harness writes in the user's place.
 HARNESS = re.compile(
     r"\s*<(task-notification|local-command-stdout|local-command-caveat|system-reminder"
@@ -78,14 +66,14 @@ def said(uuid: str, ts: int | None, text: str) -> list[dict]:
         return []
     if COMMAND.match(text):
         text = _command(text)
-    pasted = CONTEXT.match(text)
+    built = contexts.parse(text)
     turn = {
         "kind": "turn",
         "uuid": uuid,
         "ts": ts,
-        "text": _line(pasted["typed"] if pasted else text),
+        "text": _line(built.typed if built else text),
     }
-    return ([_context(pasted["context"])] if pasted else []) + ([turn] if turn["text"] else [])
+    return ([_context(built)] if built else []) + ([turn] if turn["text"] else [])
 
 
 def _sessions(conn: sqlite3.Connection, ids: set[str]) -> dict[str, dict]:
@@ -265,22 +253,24 @@ def _items(node: dict) -> list[dict]:
     return []
 
 
-def _context(text: str) -> dict:
-    recipe = RECIPE.match(text)
-    path = Path(recipe["path"]) if recipe else None
-    manifest = MANIFEST.search(text)
+def _context(built: contexts.Context) -> dict:
     return {
         "kind": "context",
-        "recipe": path.stem if path else None,
-        "recipe_url": wormhole_url(path) if path else None,
-        "commit": recipe["commit"] if recipe else None,
-        "sources": [_source(row) for row in manifest["rows"].splitlines()] if manifest else [],
+        "recipe": built.recipe.stem if built.recipe else None,
+        "recipe_url": wormhole_url(built.recipe) if built.recipe else None,
+        "commit": built.commit,
+        "sources": [_source(s) for s in built.sources],
     }
 
 
-def _source(row: str) -> dict:
-    uri, _included, tokens = row[2:-2].rsplit(" | ", 2)
-    return {"uri": uri, "tokens": int(tokens), "url": _url(uri)}
+def _source(source: contexts.Source) -> dict:
+    """Where it is, and the list of sessions built from it."""
+    return {
+        "uri": source.uri,
+        "tokens": source.tokens,
+        "url": _url(source.uri),
+        "list": f"/?{urlencode({'source': contexts.identity(source.uri)})}",
+    }
 
 
 def _url(uri: str) -> str | None:

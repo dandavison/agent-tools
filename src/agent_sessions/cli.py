@@ -166,6 +166,16 @@ def filter_options(f):
                 "--min-context", help="Only agent-sessions whose context reached e.g. 500k."
             ),
             click.option(
+                "--source",
+                multiple=True,
+                help="Only sessions whose context included this source, e.g. issue:413 (any"
+                " part of the issue). Repeatable: all of them.",
+            ),
+            click.option("--recipe", help="Only sessions whose context this recipe built."),
+            click.option(
+                "--any-source", is_flag=True, help="Any of the sources and recipe, not all."
+            ),
+            click.option(
                 "-n", "--limit", type=int, default=20, show_default=True, help="How many at most."
             ),
         ]
@@ -174,8 +184,16 @@ def filter_options(f):
     return f
 
 
-def filters(project, agent, since, min_context) -> query.Filters:
-    return query.Filters(project=project, agent=agent, since=since, min_context=min_context)
+def filters(project, agent, since, min_context, source, recipe, any_source) -> query.Filters:
+    used = [*source, *([f"recipe:{recipe}"] if recipe else [])]
+    return query.Filters(
+        project=project,
+        agent=agent,
+        since=since,
+        min_context=min_context,
+        source=" ".join(used) or None,
+        any_source=any_source,
+    )
 
 
 @main.command(
@@ -197,7 +215,20 @@ Examples
 @click.argument("query_text", metavar="QUERY")
 @filter_options
 @format_option
-def search(query_text, project, agent, since, min_context, limit, fmt, as_json, quiet) -> None:
+def search(
+    query_text,
+    project,
+    agent,
+    since,
+    min_context,
+    source,
+    recipe,
+    any_source,
+    limit,
+    fmt,
+    as_json,
+    quiet,
+) -> None:
     """Find agent-sessions whose text matches QUERY. Best match first, one per line.
 
     Matching is case-insensitive and stemmed, so `relocate` finds "relocating".
@@ -215,7 +246,12 @@ def search(query_text, project, agent, since, min_context, limit, fmt, as_json, 
     out = renderer(fmt, as_json, quiet)
     conn = db.connect()
     try:
-        hits = query.search(conn, query_text, filters(project, agent, since, min_context), limit)
+        hits = query.search(
+            conn,
+            query_text,
+            filters(project, agent, since, min_context, source, recipe, any_source),
+            limit,
+        )
     except sqlite3.OperationalError as e:
         raise click.UsageError(f"bad query {query_text!r}: {e}") from e
     _report(
@@ -236,11 +272,15 @@ def search(query_text, project, agent, since, min_context, limit, fmt, as_json, 
     help="Order by recency, peak context, or number of turns.",
 )
 @format_option
-def list_sessions(project, agent, since, min_context, limit, sort, fmt, as_json, quiet) -> None:
+def list_sessions(
+    project, agent, since, min_context, source, recipe, any_source, limit, sort, fmt, as_json, quiet
+) -> None:
     """List sessions, most recent first. No text matching; use `search` for that."""
     out = renderer(fmt, as_json, quiet)
     conn = db.connect()
-    found = query.recent(conn, filters(project, agent, since, min_context), sort, limit)
+    found = query.recent(
+        conn, filters(project, agent, since, min_context, source, recipe, any_source), sort, limit
+    )
     _report(out, [display.row(f) for f in found])
     if found:
         _next(out, found[0]["id"], "show {id} --turns", "cat --tools", "tree", "resume")
