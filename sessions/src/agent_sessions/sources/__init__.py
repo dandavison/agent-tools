@@ -69,6 +69,10 @@ class Source(Protocol):
         """Where the thread ends now, to ask what came after it later."""
         ...
 
+    def spent(self, path: Path) -> float:
+        """What the session has cost so far, as the agent last recorded it."""
+        ...
+
     def turn_command(self, native_id: str) -> list[str]:
         """Argv for one turn of this session with nobody at the keyboard.
 

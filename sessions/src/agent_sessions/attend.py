@@ -270,7 +270,7 @@ def _attending(control: Control, conn: Any, issue: channel.Issue) -> int:
             blocks, summary, before = run_turn(
                 session, prompt.body, showing=_shown(control, note, started, tag), tag=tag
             )
-        cost = float(summary.get("total_cost_usd") or 0)
+        cost = float(summary.get("turn_cost_usd") or 0)
         limits.note(issue.session_id, prompt.id, prompt.created, cost)
         log.say(
             f"{tag} answered in {time.monotonic() - started:.0f}s"
@@ -566,6 +566,7 @@ def run_turn(
     source = index.SOURCES[session["agent"]]
     path = Path(session["path"])
     before = source.leaf(path)
+    spent = source.spent(path)
     done = _spawn(
         source.turn_command(session["native_id"]),
         cwd=session["cwd"],
@@ -576,7 +577,11 @@ def run_turn(
         tag=tag,
     )
     blocks = source.blocks(path, since=before)
-    return (blocks or [_failed(done)]), _summary(done.stdout), before
+    summary = _summary(done.stdout)
+    # The agent reports the session's running total, not what this turn cost.
+    if "total_cost_usd" in summary:
+        summary["turn_cost_usd"] = float(summary["total_cost_usd"]) - spent
+    return (blocks or [_failed(done)]), summary, before
 
 
 def _spawn(

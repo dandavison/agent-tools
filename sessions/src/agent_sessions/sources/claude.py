@@ -97,11 +97,23 @@ class ClaudeSource:
             + (" --remote-control" if remote else "")
         )
 
+    def spent(self, path: Path) -> float:
+        return next(
+            (
+                float(r["totalCostUSD"])
+                for r in reversed(_read(path))
+                if r.get("type") == "cost-state"
+            ),
+            0.0,
+        )
+
     def turn_command(self, native_id: str) -> list[str]:
         # Not stream-json: what was said is read back off the transcript, so
         # all that is wanted from the process is the closing summary. My own
         # settings apply, deliberately — a turn from the channel is allowed
         # exactly what a turn at the keyboard is.
+        path = self.locate(native_id)
+        spent = self.spent(path) if path else 0.0
         return [
             *self._account(),
             "claude",
@@ -111,9 +123,10 @@ class ClaudeSource:
             "--output-format",
             "json",
             # Enforced by the agent, not noticed by us afterwards. Nothing else
-            # here bounds a single turn that runs away inside itself.
+            # here bounds a single turn that runs away inside itself. The agent
+            # checks it against the session's running total, not the turn's.
             "--max-budget-usd",
-            str(limits.PER_TURN_USD),
+            str(spent + limits.PER_TURN_USD),
         ]
 
     def resumable_from(self, path: Path, cwd: str) -> bool:

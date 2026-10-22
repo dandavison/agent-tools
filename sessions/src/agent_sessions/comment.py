@@ -276,7 +276,7 @@ def _clip(text: str, limit: int) -> str:
 def _footer(summary: dict[str, Any] | None) -> str:
     """What the turn cost, which is the one thing the transcript does not hold."""
     summary = summary or {}
-    cost = summary.get("total_cost_usd")
+    cost = summary.get("turn_cost_usd")
     turns = summary.get("num_turns")
     bits = [b for b in (f"{turns} steps" if turns else "", f"${cost:.2f}" if cost else "") if b]
     return f"<sub>{' · '.join(bits)}</sub>" if bits else ""

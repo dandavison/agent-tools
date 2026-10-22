@@ -595,6 +595,7 @@ def test_the_hold_names_the_agent_once_it_has_been_spawned(monkeypatch, tmp_path
 
     monkeypatch.setattr(attend.subprocess, "Popen", lambda *a, **k: Fake())
     monkeypatch.setattr(index.SOURCES["claude"], "leaf", lambda path: "")
+    monkeypatch.setattr(index.SOURCES["claude"], "spent", lambda path: 0.0)
     monkeypatch.setattr(
         index.SOURCES["claude"], "blocks", lambda path, since="", tip=False, whole=False: []
     )
