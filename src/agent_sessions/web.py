@@ -692,12 +692,27 @@ def _listing(carried: dict[str, str], **changed: str) -> str:
 
 
 def _options(conn: sqlite3.Connection) -> str:
-    """What the project and source boxes offer."""
+    """What the project and source boxes offer.
+
+    A labelled source is offered by its label alone, since a browser shows an
+    option's value beside its label; the form sends the source itself.
+    """
     sources = "".join(
-        f"<option value='{_h(uri)}'" + (f" label='{_h(label)}'>" if label else ">")
+        f"<option value='{_h(label)}' data-uri='{_h(uri)}'>"
+        if label
+        else f"<option value='{_h(uri)}'>"
         for uri, label in query.sources_used(conn)
     )
-    return _projects(conn) + f"<datalist id=sources>{sources}</datalist>"
+    return _projects(conn) + f"<datalist id=sources>{sources}</datalist>{SEND_SOURCE}"
+
+
+SEND_SOURCE = """<script>
+document.querySelector("form.controls").addEventListener("submit", e => {
+  const box = e.target.elements.source;
+  const chosen = [...document.querySelectorAll("#sources option")].find(o => o.value === box.value);
+  if (chosen?.dataset.uri) box.value = chosen.dataset.uri;
+});
+</script>"""
 
 
 def _projects(conn: sqlite3.Connection) -> str:
