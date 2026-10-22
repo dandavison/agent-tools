@@ -56,3 +56,46 @@ def test_an_issue_of_another_repo_is_another_issue() -> None:
 
 def test_a_slack_thread_is_the_same_however_it_is_linked() -> None:
     assert contexts.identity(f"slack:{SLACK}?thread_ts=1.2&cid=C1") == contexts.identity(SLACK)
+
+
+def issue(number: int, url: str = "") -> str:
+    """As `gh-issue-to-md` writes it; the url line is newer than the rest."""
+    line = f"url: {url}\n" if url else ""
+    return f'---\nnumber: {number}\n{line}date: 2026-09-30\ntitle: "History"\n---\n\n# History\n'
+
+
+@pytest.mark.parametrize(
+    ("pasted", "uri"),
+    [
+        (issue(395), "issue:395"),
+        (issue(395, "https://github.com/temporalio/dandavison-log/issues/395"), "issue:395"),
+        (
+            issue(7, "https://github.com/temporalio/temporal/issues/7"),
+            "https://github.com/temporalio/temporal/issues/7",
+        ),
+    ],
+)
+def test_a_pasted_issue_is_known_by_its_front_matter(pasted: str, uri: str) -> None:
+    assert contexts.pasted_issues(f"Here it is:\n{pasted}") == [uri]
+
+
+def test_every_issue_pasted_into_a_message_is_found() -> None:
+    assert contexts.pasted_issues(issue(1) + issue(2)) == ["issue:1", "issue:2"]
+
+
+def test_a_session_used_its_context_sources_and_the_issues_pasted_into_it() -> None:
+    context = TEXT.replace("Start.", "Also this:\n" + issue(395))
+    built = contexts.parse(TEXT)
+    assert built is not None
+    assert contexts.used("s", [("u1", context), ("u2", issue(396))]) == [
+        contexts.ContextSource("s", "u1", "context", s.uri, "moe-code-expert")
+        for s in built.sources
+    ] + [
+        contexts.ContextSource("s", "u1", "pasted", "issue:395", None),
+        contexts.ContextSource("s", "u2", "pasted", "issue:396", None),
+    ]
+
+
+def test_the_issues_inside_a_context_were_not_pasted_on_their_own() -> None:
+    inside = TEXT.replace("Body.", issue(413))
+    assert [s.kind for s in contexts.used("s", [("u1", inside)])] == ["context"] * 3

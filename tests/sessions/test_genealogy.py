@@ -160,7 +160,13 @@ def test_the_context_a_session_was_started_from_is_one_block_of_its_sources(conn
             {"uri": "path:notes.md", "tokens": 40, "url": None, "list": "/?source=path%3Anotes.md"},
         ],
     }
-    assert typed == {"kind": "turn", "uuid": "u1", "ts": 100, "text": "Start with the API."}
+    assert typed == {
+        "kind": "turn",
+        "uuid": "u1",
+        "ts": 100,
+        "text": "Start with the API.",
+        "issues": [],
+    }
 
 
 def test_a_context_from_an_uncommitted_recipe_says_so() -> None:
@@ -399,7 +405,7 @@ def test_a_context_source_says_which_list_finds_the_sessions_built_from_it(conn)
 
 
 def test_the_list_is_narrowed_to_sessions_built_from_a_source(listed) -> None:
-    db.write_context_sources(listed, [ContextSource(UNRELATED, "issue:412", None)])
+    db.write_context_sources(listed, [ContextSource(UNRELATED, "x1", "context", "issue:412", None)])
     listed.commit()
     body = web.handle("/", "source=issue%3A412").body
     assert f"href='/session/{UNRELATED}'" in body
@@ -421,8 +427,16 @@ def test_the_sources_chosen_can_be_all_or_any(listed) -> None:
 
 
 def test_the_sources_known_are_offered(listed) -> None:
-    db.write_context_sources(listed, [ContextSource(UNRELATED, "issue:412 exclude=x", "r")])
+    db.write_context_sources(
+        listed, [ContextSource(UNRELATED, "x1", "context", "issue:412 exclude=x", "r")]
+    )
     listed.commit()
     body = web.handle("/").body
     assert "<option value='issue:412'>" in body
     assert "<option value='recipe:r'>" in body
+
+
+def test_an_issue_pasted_into_a_turn_is_shown_at_that_turn() -> None:
+    text = 'Read this:\n---\nnumber: 395\ndate: 2026-09-30\ntitle: "History"\n---\n\nBody.'
+    [turn] = genealogy.said("u9", 100, text)
+    assert turn["issues"] == [{"uri": "issue:395", "list": "/?source=issue%3A395"}]

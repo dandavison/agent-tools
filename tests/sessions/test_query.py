@@ -115,9 +115,17 @@ def used(conn) -> None:
     db.write_context_sources(
         conn,
         [
-            ContextSource("claude:a", "issue:413 exclude=issuecomment-1", "moe-code-expert"),
-            ContextSource("claude:b", "issue:4130", None),
-            ContextSource("claude:c", "https://github.com/temporalio/temporal/issues/413", None),
+            ContextSource(
+                "claude:a", "u1", "context", "issue:413 exclude=issuecomment-1", "moe-code-expert"
+            ),
+            ContextSource("claude:b", "u1", "pasted", "issue:4130", None),
+            ContextSource(
+                "claude:c",
+                "u1",
+                "context",
+                "https://github.com/temporalio/temporal/issues/413",
+                None,
+            ),
         ],
     )
     conn.commit()
@@ -136,6 +144,11 @@ def test_several_sources_must_all_have_been_used(conn) -> None:
     both = query.Filters(source="issue:413 recipe:moe-code-expert")
     assert ids(query.recent(conn, both, "recent", 10)) == {"claude:a"}
     assert query.recent(conn, query.Filters(source="issue:413 issue:4130"), "recent", 10) == []
+
+
+def test_a_pasted_issue_is_a_source(conn) -> None:
+    used(conn)
+    assert ids(query.recent(conn, query.Filters(source="issue:4130"), "recent", 10)) == {"claude:b"}
 
 
 def test_several_sources_can_be_any_of_them(conn) -> None:

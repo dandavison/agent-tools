@@ -286,7 +286,32 @@ def test_sync_records_the_context_sources_a_session_was_started_from(
     write(projects, conversation(context))
     conn = db.connect(tmp_path / "index.db")
     index.sync(conn)
-    rows = conn.execute("SELECT session_id, uri, recipe FROM context_source").fetchall()
+    rows = conn.execute("SELECT session_id, uuid, kind, uri, recipe FROM context_source")
     assert [tuple(r) for r in rows] == [
-        (f"claude:{SESSION}", "issue:413 exclude=issuecomment-1", "moe-code-expert")
+        (
+            f"claude:{SESSION}",
+            "u1",
+            "context",
+            "issue:413 exclude=issuecomment-1",
+            "moe-code-expert",
+        )
     ]
+
+
+def test_sync_records_an_issue_pasted_at_any_turn(projects: Path, tmp_path: Path) -> None:
+    pasted = (
+        'Here is issue 395:\n---\nnumber: 395\ndate: 2026-09-30\ntitle: "History"\n---\n\nBody.'
+    )
+    write(
+        projects,
+        [
+            *conversation()[:2],
+            user("u2", "a1", pasted),
+            assistant("a2", "u2", [text_block("Read it.")], "req_2"),
+            last_prompt("a2"),
+        ],
+    )
+    conn = db.connect(tmp_path / "index.db")
+    index.sync(conn)
+    rows = conn.execute("SELECT uuid, kind, uri FROM context_source").fetchall()
+    assert [tuple(r) for r in rows] == [("u2", "pasted", "issue:395")]

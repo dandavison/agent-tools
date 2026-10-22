@@ -352,7 +352,7 @@ def test_showing_turns_names_a_command_that_takes_one(transcribed: str, run) -> 
 def sourced(indexed: Path) -> Path:
     conn = db.connect()
     db.write_context_sources(
-        conn, [ContextSource(ID, "issue:413#issuecomment-1", "moe-code-expert")]
+        conn, [ContextSource(ID, "u1", "context", "issue:413#issuecomment-1", "moe-code-expert")]
     )
     conn.commit()
     return indexed
