@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg">
+<title>Session genealogy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12.12.0/dist/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "react-dom": "https://esm.sh/react-dom@18.3.1?external=react",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?external=react",
+    "@xyflow/react": "https://esm.sh/@xyflow/react@12.12.0?external=react,react-dom",
+    "@dagrejs/dagre": "https://esm.sh/@dagrejs/dagre@1.1.4",
+    "htm": "https://esm.sh/htm@3.1.1"
+  }
+}
+</script>
+<style>
+:root {
+  --bg: #f5f4f0;
+  --dots: #d8d5cc;
+  --card: #ffffff;
+  --card-2: #faf9f6;
+  --line: #e7e4dc;
+  --text: #1c1b19;
+  --muted: #6e6a62;
+  --faint: #a19c92;
+  --shadow: 0 1px 2px rgb(30 25 15 / 6%), 0 8px 24px -8px rgb(30 25 15 / 14%);
+  --shadow-lift: 0 2px 4px rgb(30 25 15 / 8%), 0 18px 40px -12px rgb(30 25 15 / 24%);
+  --link: #2563eb;
+  --warn: #d97706;
+  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1014;
+    --dots: #252932;
+    --card: #161920;
+    --card-2: #1b1f27;
+    --line: #272c36;
+    --text: #e9e7e3;
+    --muted: #9196a0;
+    --faint: #626874;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 10px 30px -10px rgb(0 0 0 / 60%);
+    --shadow-lift: 0 2px 4px rgb(0 0 0 / 50%), 0 20px 44px -12px rgb(0 0 0 / 75%);
+    --link: #6c9dff;
+  }
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.react-flow { --xy-background-color: var(--bg); --xy-edge-stroke: var(--faint); }
+.react-flow__attribution { display: none; }
+.react-flow__handle { opacity: 0; }
+.react-flow__controls { box-shadow: var(--shadow); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.react-flow__controls-button { background: var(--card); border-bottom: 1px solid var(--line); fill: var(--muted); }
+.react-flow__controls-button:hover { background: var(--card-2); }
+.mono { font-family: var(--mono); font-size: 11.5px; letter-spacing: -0.01em; }
+
+.masthead { position: absolute; top: 20px; left: 24px; z-index: 5; pointer-events: none; }
+.masthead .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.masthead h1 { margin: 2px 0 4px; font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+.masthead .summary { color: var(--muted); display: flex; gap: 14px; }
+.masthead .summary b { color: var(--text); font-weight: 600; }
+
+.segment {
+  width: 460px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.segment.focus { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); box-shadow: var(--shadow-lift); }
+.segment .band { height: 4px; background: var(--accent); }
+.segment header { padding: 10px 14px 8px; display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid var(--line); }
+.segment header .title { font-weight: 650; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.segment header .meta { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sid {
+  font: 500 11.5px var(--mono); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  border: 0; border-radius: 6px; padding: 2px 7px; cursor: copy;
+}
+.items { max-height: 480px; overflow: auto; padding: 6px 0; }
+.turn { display: flex; gap: 10px; padding: 1px 14px; white-space: nowrap; }
+.turn time { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; flex: none; }
+.turn span { overflow: hidden; text-overflow: ellipsis; }
+.compaction {
+  margin: 5px 14px; display: flex; align-items: center; gap: 8px;
+  color: var(--warn); font-size: 11.5px; font-weight: 500;
+}
+.compaction::before, .compaction::after { content: ""; flex: 1; border-top: 1px dashed color-mix(in srgb, var(--warn) 50%, transparent); }
+.context {
+  margin: 4px 10px 6px;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.context .kind { display: flex; align-items: baseline; gap: 7px; font-weight: 600; margin-bottom: 6px; }
+.context .kind .commit { color: var(--muted); font-weight: 400; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip {
+  font-family: var(--mono); font-size: 11px;
+  padding: 1px 6px; border-radius: 6px;
+  background: var(--card-2); border: 1px solid var(--line); color: var(--text);
+}
+a.chip { color: var(--link); }
+.chip .n { color: var(--muted); margin-left: 5px; }
+.context .total { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.loading { height: 100%; display: grid; place-items: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="root"><div class="loading">Loading genealogy…</div></div>
+<script type="module">
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, Handle, Position,
+  useNodesState, useNodesInitialized, useReactFlow,
+} from "@xyflow/react";
+import dagre from "@dagrejs/dagre";
+import htm from "htm";
+
+const html = htm.bind(React.createElement);
+const DATA = "{{DATA}}";
+const PALETTE = ["#2563eb", "#8b5cf6", "#ea580c", "#16a34a", "#db2777", "#0891b2", "#ca8a04", "#64748b"];
+
+const tokens = (n) => !n ? "" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : `${n}`;
+const day = (ts) => ts ? new Date(ts * 1000).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" }) : "";
+const clock = (ts) => ts ? new Date(ts * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+const short = (id) => id.split(":")[1].slice(0, 8);
+const sourceLabel = (uri) => uri.replace(/ exclude=.*$/, " (filtered)").replace(/#issuecomment-(\d+)/, " · comment");
+
+function Copy({ id }) {
+  const [said, setSaid] = useState(short(id));
+  const copy = async (event) => {
+    event.stopPropagation();
+    try { await navigator.clipboard.writeText(`agent sessions resume ${id}`); setSaid("copied"); }
+    catch { setSaid("no clipboard"); }
+    setTimeout(() => setSaid(short(id)), 1200);
+  };
+  return html`<button class="sid nodrag" title=${`copy: agent sessions resume ${id}`} onClick=${copy}>${said}</button>`;
+}
+
+function Context({ c }) {
+  const total = c.sources.reduce((n, s) => n + s.tokens, 0);
+  return html`
+    <div class="context">
+      <div class="kind">
+        ${c.recipe ? html`<a class="nodrag" href=${c.recipe_url}>${c.recipe}</a>` : "Context"}
+        ${c.recipe ? html`<span class="commit mono">${c.commit ? `@ ${c.commit}` : "not committed"}</span>` : null}
+      </div>
+      <div class="chips">
+        ${c.sources.map((s) => {
+          const inner = html`${sourceLabel(s.uri)}<span class="n">${tokens(s.tokens)}</span>`;
+          return s.url
+            ? html`<a class="chip nodrag" key=${s.uri} href=${s.url} title=${s.uri}>${inner}</a>`
+            : html`<span class="chip" key=${s.uri} title=${s.uri}>${inner}</span>`;
+        })}
+      </div>
+      <div class="total">${tokens(total)} tokens</div>
+    </div>`;
+}
+
+function Item({ item }) {
+  if (item.kind === "context") return html`<${Context} c=${item} />`;
+  if (item.kind === "compaction") return html`
+    <div class="compaction">compacted (${item.trigger}) ${tokens(item.pre_tokens)} → ${tokens(item.post_tokens)}</div>`;
+  return html`<div class="turn" title=${item.text}><time>${clock(item.ts)}</time><span>${item.text}</span></div>`;
+}
+
+function SegmentNode({ data: n }) {
+  return html`
+    <div class=${"segment" + (n.focus ? " focus" : "")} style=${{ "--accent": n.accent }}>
+      <div class="band" />
+      <header>
+        <${Copy} id=${n.session.id} />
+        <a class="title nodrag" href=${`/session/${n.session.id}`}>${n.session.title || short(n.session.id)}</a>
+        <span class="meta">${day(n.started_at)}${n.context_tokens ? ` · ${tokens(n.context_tokens)}` : ""}</span>
+      </header>
+      <div class="items nowheel">${n.items.map((item, i) => html`<${Item} key=${i} item=${item} />`)}</div>
+      <${Handle} type="target" position=${Position.Top} />
+      <${Handle} type="source" position=${Position.Bottom} />
+    </div>`;
+}
+
+const nodeTypes = { segment: SegmentNode };
+
+function graph(genealogy) {
+  const colour = {};
+  for (const n of genealogy.nodes) colour[n.session.id] ??= PALETTE[Object.keys(colour).length % PALETTE.length];
+  const owner = Object.fromEntries(genealogy.nodes.map((n) => [n.id, n.session.id]));
+  const nodes = genealogy.nodes.map((n) => ({
+    id: n.id, type: "segment", position: { x: 0, y: 0 }, style: { opacity: 0 },
+    data: { ...n, accent: colour[n.session.id], focus: n.members.includes(genealogy.focus) },
+  }));
+  const edges = genealogy.nodes.filter((n) => n.parent).map((n) => {
+    const fork = owner[n.parent] !== n.session.id;
+    return {
+      id: `${n.parent}-${n.id}`, source: n.parent, target: n.id, type: "smoothstep",
+      label: fork ? "fork" : undefined,
+      style: { stroke: colour[n.session.id], strokeWidth: 2, strokeDasharray: fork ? "5 5" : undefined },
+    };
+  });
+  return { nodes, edges };
+}
+
+// Laid out once React Flow has measured the nodes, whose height is their turns.
+function layout(nodes, edges) {
+  const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 70 });
+  for (const n of nodes) g.setNode(n.id, { width: n.measured.width, height: n.measured.height });
+  for (const e of edges) g.setEdge(e.source, e.target);
+  dagre.layout(g);
+  return nodes.map((n) => {
+    const { x, y } = g.node(n.id);
+    return { ...n, style: {}, position: { x: x - n.measured.width / 2, y: y - n.measured.height / 2 } };
+  });
+}
+
+function Flow({ genealogy }) {
+  const [initial] = useState(() => graph(genealogy));
+  const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
+  const measured = useNodesInitialized();
+  const { getNodes, fitView } = useReactFlow();
+  const [laid, setLaid] = useState(false);
+  useEffect(() => {
+    if (!measured || laid) return;
+    setNodes(layout(getNodes(), initial.edges));
+    setLaid(true);
+  }, [measured, laid]);
+  // Clear of the masthead, which sits over the top left.
+  useEffect(() => {
+    if (laid) fitView({ padding: { top: "120px", right: "40px", bottom: "40px", left: "40px" }, maxZoom: 1 });
+  }, [laid]);
+  const focus = genealogy.nodes.find((n) => n.members.includes(genealogy.focus));
+  const sessions = new Set(genealogy.nodes.map((n) => n.session.id)).size;
+  return html`
+    <${ReactFlow} nodes=${nodes} edges=${initial.edges} onNodesChange=${onNodesChange} nodeTypes=${nodeTypes}
+      minZoom=${0.1} maxZoom=${1.6} nodesConnectable=${false} proOptions=${{ hideAttribution: true }}>
+      <${Background} variant=${BackgroundVariant.Dots} gap=${22} size=${1.4} color="var(--dots)" />
+      <${Controls} showInteractive=${false} position="bottom-left" />
+    <//>
+    <div class="masthead">
+      <div class="eyebrow">Genealogy</div>
+      <h1>${focus?.session.title || short(genealogy.focus)}</h1>
+      <div class="summary"><span><b>${sessions}</b> sessions</span></div>
+    </div>`;
+}
+
+const genealogy = await (await fetch(DATA)).json();
+createRoot(document.getElementById("root")).render(
+  html`<${ReactFlowProvider}><${Flow} genealogy=${genealogy} /><//>`);
+</script>
+</body>
+</html>

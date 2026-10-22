@@ -31,6 +31,7 @@ from agent_sessions import (
     channel,
     db,
     display,
+    genealogy,
     index,
     log,
     models,
@@ -75,6 +76,8 @@ def handle(path: str, query_string: str = "") -> Response:
             return _session(conn, id, params)
         if name := _tail(path, "/network/"):
             return _network(conn, name)
+        if id := _tail(path, "/genealogy/"):
+            return _genealogy(conn, id)
         return _error(404, "No such page.")
     finally:
         conn.close()
@@ -193,7 +196,8 @@ def _session(conn: sqlite3.Connection, id: str, params: dict[str, str]) -> Respo
         _controls(params, "recent") + _projects(conn),
         _flash(params),
         f"<h1>{_h(session['title'] or session['id'])}</h1>",
-        f"<p class=actions>{_actions(session['id'])}</p>",
+        f"<p class=actions>{_actions(session['id'])}"
+        f"<a class=resume href='/genealogy/{quote(session['id'], safe=':')}'>genealogy</a></p>",
         f"<dl class=details>{fields}</dl>",
         _lineage(query.forked_from(conn, session["id"]), left.get("", [])),
         f"<h2>turns{_tools_button(session['id'], tools) if carried else ''}</h2>"
@@ -417,6 +421,17 @@ def _network(conn: sqlite3.Connection, name: str) -> Response:
         return _error(404, "No such network.")
     page = (Path(__file__).parent / "network.html").read_text()
     return Response(page.replace("{{DATA}}", f"/network/{quote(name)}.json"))
+
+
+def _genealogy(conn: sqlite3.Connection, id: str) -> Response:
+    session = query.get(conn, id.removesuffix(".json"))
+    if session is None:
+        return _error(404, f"No single session matches {id!r}.")
+    if id.endswith(".json"):
+        shown = genealogy.of(conn, session["id"])
+        return Response(orjson.dumps(shown).decode(), content_type="application/json")
+    page = (Path(__file__).parent / "genealogy.html").read_text()
+    return Response(page.replace("{{DATA}}", f"/genealogy/{quote(session['id'], safe=':')}.json"))
 
 
 def _resume(conn: sqlite3.Connection, id: str, remote: bool = False) -> Response:
