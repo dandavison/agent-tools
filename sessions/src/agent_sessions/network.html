@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg">
+<title>Session network</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12.12.0/dist/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "react-dom": "https://esm.sh/react-dom@18.3.1?external=react",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?external=react",
+    "@xyflow/react": "https://esm.sh/@xyflow/react@12.12.0?external=react,react-dom",
+    "htm": "https://esm.sh/htm@3.1.1",
+    "marked": "https://esm.sh/marked@14.1.4",
+    "dompurify": "https://esm.sh/dompurify@3.2.4"
+  }
+}
+</script>
+<style>
+:root {
+  --bg: #f5f4f0;
+  --dots: #d8d5cc;
+  --card: #ffffff;
+  --card-2: #faf9f6;
+  --line: #e7e4dc;
+  --text: #1c1b19;
+  --muted: #6e6a62;
+  --faint: #a19c92;
+  --shadow: 0 1px 2px rgb(30 25 15 / 6%), 0 8px 24px -8px rgb(30 25 15 / 14%);
+  --shadow-lift: 0 2px 4px rgb(30 25 15 / 8%), 0 18px 40px -12px rgb(30 25 15 / 24%);
+  --implementer: #2563eb;
+  --reviewer: #8b5cf6;
+  --you: #ea580c;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --hot: #dc2626;
+  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1014;
+    --dots: #252932;
+    --card: #161920;
+    --card-2: #1b1f27;
+    --line: #272c36;
+    --text: #e9e7e3;
+    --muted: #9196a0;
+    --faint: #626874;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 10px 30px -10px rgb(0 0 0 / 60%);
+    --shadow-lift: 0 2px 4px rgb(0 0 0 / 50%), 0 20px 44px -12px rgb(0 0 0 / 75%);
+    --implementer: #6c9dff;
+    --reviewer: #b394ff;
+    --you: #ff9a5a;
+  }
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+#root { display: flex; }
+.canvas { position: relative; flex: 1; min-width: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+.react-flow { --xy-background-color: var(--bg); --xy-edge-stroke: var(--faint); }
+.react-flow__attribution { display: none; }
+.react-flow__handle { opacity: 0; }
+.react-flow__controls {
+  box-shadow: var(--shadow);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.react-flow__controls-button {
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  fill: var(--muted);
+}
+.react-flow__controls-button:hover { background: var(--card-2); }
+
+.mono { font-family: var(--mono); font-size: 11.5px; letter-spacing: -0.01em; }
+.muted { color: var(--muted); }
+
+/* --- header ------------------------------------------------------------ */
+.masthead {
+  position: absolute; top: 20px; left: 24px; z-index: 5;
+  pointer-events: none;
+}
+.masthead .eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--faint);
+}
+.masthead h1 { margin: 2px 0 4px; font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+.masthead .summary { color: var(--muted); display: flex; gap: 14px; }
+.masthead .summary b { color: var(--text); font-weight: 600; }
+
+/* --- nodes ------------------------------------------------------------- */
+.session {
+  width: 380px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: box-shadow .2s, transform .2s, border-color .2s;
+  cursor: pointer;
+}
+.session:hover, .selected > .session { box-shadow: var(--shadow-lift); }
+.selected > .session { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.session .band {
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 30%, transparent));
+}
+.session .body { padding: 16px 18px 6px; }
+.session .top { display: flex; align-items: center; gap: 8px; }
+.role {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  padding: 3px 9px 3px 8px; border-radius: 99px;
+}
+.role svg { width: 13px; height: 13px; }
+.status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.dot.live { background: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent); animation: pulse 2s infinite; }
+@keyframes pulse {
+  70% { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.session h2 { margin: 10px 0 2px; font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
+.session .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.session .meta span + span::before { content: "·"; margin-right: 10px; color: var(--faint); }
+
+.gauge { margin: 14px 0 4px; }
+.gauge .labels { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+.gauge .labels b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.gauge .track { height: 6px; border-radius: 99px; background: var(--card-2); border: 1px solid var(--line); overflow: hidden; }
+.gauge .fill { height: 100%; border-radius: 99px; }
+
+.section {
+  border-top: 1px solid var(--line);
+  padding: 12px 18px 14px;
+  background: var(--card-2);
+}
+.section .label {
+  display: flex; justify-content: space-between;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--faint); margin-bottom: 6px;
+}
+.section .label time { letter-spacing: 0; text-transform: none; font-weight: 500; }
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp-3 { -webkit-line-clamp: 3; }
+.clamp-4 { -webkit-line-clamp: 4; }
+.clamp-6 { -webkit-line-clamp: 6; }
+.reply { margin: 0; color: var(--text); white-space: pre-line; }
+
+.context {
+  width: 300px;
+  background: transparent;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 14px;
+  padding: 14px 16px 16px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.context:hover, .selected > .context { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.context .kind { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; }
+.context .kind svg { width: 15px; height: 15px; color: var(--accent); }
+.context .file { margin: 2px 0 10px; color: var(--muted); }
+.context .purpose { margin: 0 0 10px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  font-family: var(--mono); font-size: 11px;
+  padding: 2px 7px; border-radius: 6px;
+  background: var(--card); border: 1px solid var(--line); color: var(--text);
+}
+.context .foot { margin-top: 10px; display: flex; gap: 10px; color: var(--muted); font-size: 12px; }
+.warning { color: var(--warn); display: flex; gap: 6px; align-items: center; }
+.warning svg { width: 13px; height: 13px; }
+
+.you {
+  width: 64px;
+  display: flex; flex-direction: column; align-items: center;
+  cursor: pointer;
+}
+.you .disc {
+  width: 64px; height: 112px; border-radius: 32px;
+  display: grid; place-items: center;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow), 0 0 0 6px color-mix(in srgb, var(--you) 10%, transparent);
+  color: var(--you);
+  transition: box-shadow .2s;
+}
+.you:hover .disc, .selected > .you .disc {
+  box-shadow: var(--shadow-lift), 0 0 0 9px color-mix(in srgb, var(--you) 16%, transparent);
+}
+.you .disc svg { width: 26px; height: 26px; }
+.you .name, .you .what { flex: none; width: 180px; text-align: center; }
+.you .name { margin-top: 10px; font-weight: 650; font-size: 15px; }
+.you .what { color: var(--muted); font-size: 12.5px; }
+
+/* --- edges ------------------------------------------------------------- */
+.pill {
+  position: absolute;
+  pointer-events: all;
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 10px 4px 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  box-shadow: var(--shadow);
+  font-size: 12px; font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pill .n {
+  font-variant-numeric: tabular-nums; font-weight: 650;
+  color: var(--card); background: var(--accent);
+  min-width: 18px; height: 18px; border-radius: 99px;
+  display: grid; place-items: center; font-size: 11px; padding: 0 5px;
+}
+.pill time { color: var(--muted); font-weight: 400; }
+
+/* --- drawer ------------------------------------------------------------ */
+.drawer {
+  flex: none;
+  width: 440px;
+  margin: 14px 14px 14px 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lift);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  animation: slide .22s ease-out;
+}
+@keyframes slide { from { transform: translateX(16px); opacity: 0; } }
+.drawer header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: start; gap: 10px; }
+.drawer header h3 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+.drawer header p { margin: 2px 0 0; color: var(--muted); }
+.drawer .close {
+  margin-left: auto; border: 0; background: none; color: var(--muted); cursor: pointer;
+  width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+}
+.drawer .close:hover { background: var(--card-2); color: var(--text); }
+.drawer .scroll { overflow: auto; padding: 8px 20px 24px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 12px 0 4px; }
+.stats dt { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.stats dd { margin: 1px 0 0; font-weight: 500; }
+.drawer h4 {
+  font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em;
+  font-weight: 600; margin: 20px 0 8px;
+}
+.source { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.source:last-child { border-bottom: 0; }
+.source .why { color: var(--muted); margin-top: 3px; }
+.cmd {
+  font-family: var(--mono); font-size: 11.5px;
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 11px; overflow-x: auto; white-space: pre;
+}
+.links { display: flex; gap: 8px; margin-top: 14px; }
+.button {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 500 12.5px var(--sans); color: var(--text); text-decoration: none;
+  border: 1px solid var(--line); background: var(--card); border-radius: 9px; padding: 6px 11px;
+}
+.button:hover { background: var(--card-2); }
+
+.timeline { position: relative; margin-top: 6px; }
+.timeline::before {
+  content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px;
+  background: var(--line); border-radius: 2px;
+}
+.event { position: relative; padding: 10px 0 12px 28px; cursor: pointer; }
+.event .marker {
+  position: absolute; left: 1px; top: 14px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--card); border: 3px solid var(--accent);
+}
+.event .route { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.event .route .arrow { color: var(--faint); font-weight: 400; }
+.event .when { color: var(--muted); font-size: 12px; margin: 1px 0 6px; display: flex; gap: 8px; }
+.held {
+  color: var(--you); background: color-mix(in srgb, var(--you) 10%, transparent);
+  border-radius: 99px; padding: 0 7px; font-size: 11.5px; font-weight: 500;
+}
+.event .text {
+  margin: 0;
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 11px;
+}
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p, .md ul, .md ol { margin: 0 0 8px; }
+.md ul, .md ol { padding-left: 18px; }
+.md h1, .md h2, .md h3, .md h4 { font-size: 13px; margin: 10px 0 4px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.md code { font-family: var(--mono); font-size: 11.5px; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 0 3px; }
+.md pre { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px; overflow-x: auto; }
+.md pre code { border: 0; padding: 0; }
+.md a { color: var(--implementer); }
+.folded {
+  max-height: 10.5em; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent);
+  mask-image: linear-gradient(to bottom, #000 65%, transparent);
+}
+.event:hover .text { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+
+.loading { height: 100%; display: grid; place-items: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="root"><div class="loading">Loading network…</div></div>
+<script type="module">
+import React, { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, Handle, Position,
+  BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath,
+} from "@xyflow/react";
+import htm from "htm";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+
+const html = htm.bind(React.createElement);
+const DATA = "{{DATA}}";
+const WINDOW = 1_000_000;
+// Two horizontal lanes between the sessions and you: rightward on top, leftward below.
+const LANE = { top: 96, bottom: 136 };
+// The lanes meet the straight sides of the capsule that stands for you.
+const GATE = { top: 36, bottom: 76 };
+// Contexts sit above their sessions, bottom-aligned whatever their height.
+const CONTEXT_GAP = 56;
+const ACCENT = { implementer: "var(--implementer)", reviewer: "var(--reviewer)" };
+
+// --- icons (16px grid, stroked) ---------------------------------------------
+const icon = (...d) => html`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+  stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d.map(
+    (p) => html`<path d=${p} />`)}</svg>`;
+const ICON = {
+  implementer: icon("M5.5 4 2 8l3.5 4", "M10.5 4 14 8l-3.5 4", "M9 2.5 7 13.5"),
+  reviewer: icon("M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z", "M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"),
+  you: icon("M8 8a2.75 2.75 0 1 0 0-5.5A2.75 2.75 0 0 0 8 8z", "M2.75 14c.5-2.6 2.7-4.25 5.25-4.25S12.75 11.4 13.25 14"),
+  recipe: icon("M4 1.75h5.5L12.5 4.75v9.5h-8.5z", "M9.5 1.75v3h3", "M6.5 8h4", "M6.5 10.5h4"),
+  pasted: icon("M5.5 1.8h5v2.4h-5z", "M10.5 3h2v11.2h-9V3h2"),
+  warn: icon("M8 2 14.5 13.5h-13z", "M8 6.5v3", "M8 11.6v.1"),
+  close: icon("M4 4l8 8", "M12 4l-8 8"),
+  resume: icon("M5 3.5v9l7-4.5z"),
+  open: icon("M6 3H3v10h10v-3", "M9 2h5v5", "M14 2 7.5 8.5"),
+};
+
+// --- formatting -------------------------------------------------------------
+const tokens = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : `${Math.round(n / 1e3)}k`;
+const clock = (ts) => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+const day = (ts) => ts ? new Date(ts * 1000).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+const ago = (ts) => {
+  if (!ts) return "";
+  const s = Date.now() / 1000 - ts;
+  if (s < 90) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+};
+const span = (s) => s < 90 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`;
+const short = (id) => id.split(":")[1].slice(0, 8);
+const model = (m) => (m || "").replace(/^claude-/, "").replace(/-(\d+)-(\d+)$/, " $1.$2");
+const heat = (f) => f < 0.5 ? "var(--ok)" : f < 0.8 ? "var(--warn)" : "var(--hot)";
+const clean = (t) => t.replace(/<\/?pasted_content[^>]*>/g, "").trim();
+const plain = (t) => clean(t).replace(/\*\*|__|`/g, "").replace(/^#+\s*/gm, "");
+const Markdown = ({ text, className = "" }) => html`<div class=${"md " + className}
+  dangerouslySetInnerHTML=${{ __html: DOMPurify.sanitize(marked.parse(clean(text))) }} />`;
+const sourceLabel = (uri) => uri.replace(/ exclude=.*$/, " (filtered)").replace(/#issuecomment-(\d+)/, " · comment");
+const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// --- nodes ------------------------------------------------------------------
+function SessionNode({ data: s }) {
+  const used = (s.context_tokens || 0) / WINDOW;
+  const side = s.side;  // "left" sessions face right, toward the relay; "right" ones face left.
+  const inner = side === "left" ? Position.Right : Position.Left;
+  return html`
+    <div class="session" style=${{ "--accent": s.accent, "--port": s.accent }}>
+      <div class="band" />
+      <div class="body">
+        <div class="top">
+          <span class="role">${ICON[s.role] || ""}${s.role}</span>
+          <span class="status">
+            <span class=${"dot" + (s.live ? " live" : "")} />
+            ${s.live ? "running" : `idle · ${ago(s.ended_at)}`}
+          </span>
+        </div>
+        <h2>${s.title || short(s.id)}</h2>
+        <div class="meta">
+          <span class="mono">${short(s.id)}</span>
+          <span>${model(s.model)}</span>
+          <span>${s.turns} turns</span>
+        </div>
+        <div class="gauge">
+          <div class="labels">
+            <span class="muted">Context</span>
+            <span><b>${tokens(s.context_tokens || 0)}</b><span class="muted"> / ${tokens(WINDOW)}</span></span>
+          </div>
+          <div class="track"><div class="fill" style=${{ width: `${Math.min(100, used * 100)}%`, background: heat(used) }} /></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="label"><span>Latest reply</span><time>${clock(s.latest?.ts)}</time></div>
+        <p class="reply clamp clamp-4">${s.latest ? plain(s.latest.text) : "—"}</p>
+      </div>
+      <${Handle} type="target" position=${Position.Top} id="context" />
+      <${Handle} type="source" position=${inner} id="out" style=${{ top: side === "left" ? LANE.top : LANE.bottom }} />
+      <${Handle} type="target" position=${inner} id="in" style=${{ top: side === "left" ? LANE.bottom : LANE.top }} />
+    </div>`;
+}
+
+function ContextNode({ data }) {
+  const c = data.context;
+  const name = c.recipe ? c.recipe.split("/").pop() : null;
+  return html`
+    <div class="context" style=${{ "--accent": data.accent, "--port": data.accent }}>
+      <div class="kind">${c.recipe ? ICON.recipe : ICON.pasted}${c.recipe ? "Recipe" : "Pasted by hand"}</div>
+      <div class="file mono">${name || "no recipe"}</div>
+      <p class="purpose clamp clamp-3">${c.purpose}</p>
+      <div class="chips">${c.sources.map((s) => html`<span class="chip" key=${s.uri}>${sourceLabel(s.uri)}</span>`)}</div>
+      <div class="foot">
+        ${c.budget ? html`<span>${tokens(c.budget)} budget</span>` : null}
+        ${c.recipe
+          ? html`<span>${c.exclusions.length ? `${c.exclusions.length} exclusions` : "no exclusions"}</span>`
+          : html`<span class="warning">${ICON.warn}cannot be rebuilt</span>`}
+      </div>
+      <${Handle} type="source" position=${Position.Bottom} id="out" />
+    </div>`;
+}
+
+function YouNode({ data }) {
+  return html`
+    <div class="you">
+      <div class="disc">${ICON.you}</div>
+      <div class="name">You</div>
+      <div class="what">read, vet and paste<br />${data.relays} relays</div>
+      <${Handle} type="target" position=${Position.Left} id="from-left" style=${{ top: GATE.top }} />
+      <${Handle} type="source" position=${Position.Right} id="to-right" style=${{ top: GATE.top }} />
+      <${Handle} type="target" position=${Position.Right} id="from-right" style=${{ top: GATE.bottom }} />
+      <${Handle} type="source" position=${Position.Left} id="to-left" style=${{ top: GATE.bottom }} />
+    </div>`;
+}
+
+// --- edges ------------------------------------------------------------------
+function RelayEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }) {
+  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const last = data.relays.at(-1);
+  return html`
+    <${React.Fragment}>
+      <${Arrowhead} id=${id} color=${data.accent} />
+      <${BaseEdge} id=${id} path=${path} markerEnd=${`url(#arrow-${id})`}
+        style=${{ stroke: data.accent, strokeWidth: 2, opacity: 0.85 }} />
+      ${data.label ? html`
+        <${EdgeLabelRenderer}>
+          <div class="pill nodrag nopan" style=${{ "--accent": data.accent, transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - data.lift}px)` }}
+               onClick=${data.onClick}>
+            <span class="n">${data.relays.length}</span>${data.label}
+            ${last ? html`<time>· ${clock(last.prompted_at)}</time>` : null}
+          </div>
+        <//>` : null}
+    <//>`;
+}
+
+function BuildsEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }) {
+  const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 12 });
+  return html`
+    <${React.Fragment}>
+      <${Arrowhead} id=${id} color=${data.accent} />
+      <${BaseEdge} id=${id} path=${path} markerEnd=${`url(#arrow-${id})`}
+        style=${{ stroke: data.accent, strokeWidth: 1.5, strokeDasharray: "4 5", opacity: 0.55 }} />
+    <//>`;
+}
+
+// Our own marker rather than React Flow's, whose colour is an SVG attribute
+// and so cannot be a CSS variable that follows the colour scheme.
+function Arrowhead({ id, color }) {
+  return html`
+    <defs>
+      <marker id=${`arrow-${id}`} viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+        <path d="M1 1 L9 5 L1 9 z" style=${{ fill: color }} />
+      </marker>
+    </defs>`;
+}
+
+const nodeTypes = { session: SessionNode, context: ContextNode, you: YouNode };
+const edgeTypes = { relay: RelayEdge, builds: BuildsEdge };
+
+// --- drawer -----------------------------------------------------------------
+function Drawer({ selection, network, close }) {
+  if (!selection) return null;
+  const body = selection.kind === "session"
+    ? html`<${SessionDetail} s=${selection.session} />`
+    : html`<${Timeline} network=${network} only=${selection.channel} />`;
+  const [title, sub] = selection.kind === "session"
+    ? [selection.session.title, `${capital(selection.session.role)} · ${short(selection.session.id)}`]
+    : selection.channel
+      ? [capital(selection.channel.carries), `${selection.channel.relays.length} relayed by you`]
+      : ["Everything you relayed", `${network.channels.reduce((n, c) => n + c.relays.length, 0)} messages, oldest first`];
+  return html`
+    <aside class="drawer">
+      <header>
+        <div><h3>${title}</h3><p>${sub}</p></div>
+        <button class="close" onClick=${close} aria-label="Close">${ICON.close}</button>
+      </header>
+      <div class="scroll">${body}</div>
+    </aside>`;
+}
+
+function SessionDetail({ s }) {
+  const c = s.context;
+  const rebuild = c.recipe ? `agent ctx ${c.recipe.replace(/^\/Users\/[^/]+/, "~")} | agent with-input` : null;
+  return html`
+    <dl class="stats">
+      <div><dt>Context</dt><dd>${tokens(s.context_tokens || 0)} of ${tokens(WINDOW)}</dd></div>
+      <div><dt>Model</dt><dd>${model(s.model)}</dd></div>
+      <div><dt>Turns</dt><dd>${s.turns}</dd></div>
+      <div><dt>Active</dt><dd>${clock(s.started_at)}–${clock(s.ended_at)}, ${day(s.ended_at)}</dd></div>
+      <div style=${{ gridColumn: "1 / -1" }}><dt>Project</dt><dd class="mono">${s.project}</dd></div>
+    </dl>
+    <div class="links">
+      <a class="button" href=${`/resume/${s.id}`}>${ICON.resume}Resume</a>
+      <a class="button" href=${`/session/${s.id}`}>${ICON.open}Transcript</a>
+    </div>
+    <h4>Built from</h4>
+    <p style=${{ margin: "0 0 8px" }}>${c.purpose}</p>
+    ${c.sources.map((src) => html`
+      <div class="source" key=${src.uri}>
+        <span class="chip">${sourceLabel(src.uri)}</span>
+        ${src.provenance ? html`<div class="why">${src.provenance}</div>` : null}
+      </div>`)}
+    <h4>Rebuild</h4>
+    ${rebuild
+      ? html`<div class="cmd">${rebuild}</div>`
+      : html`<p class="warning">${ICON.warn}No recipe. Its context was pasted by hand, so it cannot be rebuilt.</p>`}
+    <h4>Latest reply · ${clock(s.latest?.ts)}</h4>
+    <div class="event" style=${{ paddingLeft: 0 }}>${s.latest ? html`<${Markdown} text=${s.latest.text} className="text" />` : "—"}</div>`;
+}
+
+function Timeline({ network, only }) {
+  const byId = Object.fromEntries(network.sessions.map((s) => [s.id, s]));
+  const [open, setOpen] = useState(null);
+  const events = (only ? [only] : network.channels)
+    .flatMap((c) => c.relays.map((r) => ({ ...r, c })))
+    .sort((a, b) => a.prompted_at - b.prompted_at);
+  return html`
+    <div class="timeline">
+      ${events.map((e) => {
+        const from = byId[e.c.from], to = byId[e.c.to];
+        return html`
+          <div class="event" key=${e.prompt} style=${{ "--accent": from.accent }} onClick=${() => setOpen(open === e.prompt ? null : e.prompt)}>
+            <span class="marker" />
+            <div class="route">${capital(from.role)}<span class="arrow">→</span>${capital(to.role)}</div>
+            <div class="when">
+              <span>${clock(e.replied_at)} → ${clock(e.prompted_at)}</span>
+              <span class="held">held ${span(e.prompted_at - e.replied_at)}</span>
+            </div>
+            <${Markdown} text=${e.text} className=${"text" + (open === e.prompt ? "" : " folded")} />
+          </div>`;
+      })}
+    </div>`;
+}
+
+// --- layout -----------------------------------------------------------------
+// Hand-placed for a pair: context, session, you, session, context. More than
+// two sessions needs a layout engine.
+function graph(network, select) {
+  const [left, right] = network.sessions.map((s, i) => ({
+    ...s, side: i === 0 ? "left" : "right", accent: ACCENT[s.role] || "var(--faint)",
+  }));
+  network.sessions = [left, right];
+  const relays = network.channels.reduce((n, c) => n + c.relays.length, 0);
+  const nodes = [
+    { id: "ctx-left", type: "context", position: { x: 40, y: -CONTEXT_GAP }, origin: [0, 1], data: left },
+    { id: left.id, type: "session", position: { x: 0, y: 0 }, data: left },
+    { id: "you", type: "you", position: { x: 588, y: LANE.top - GATE.top }, data: { relays } },
+    { id: right.id, type: "session", position: { x: 860, y: 0 }, data: right },
+    { id: "ctx-right", type: "context", position: { x: 900, y: -CONTEXT_GAP }, origin: [0, 1], data: right },
+  ];
+  const edges = [
+    { id: "b-left", source: "ctx-left", sourceHandle: "out", target: left.id, targetHandle: "context", type: "builds", data: left },
+    { id: "b-right", source: "ctx-right", sourceHandle: "out", target: right.id, targetHandle: "context", type: "builds", data: right },
+  ];
+  for (const c of network.channels) {
+    const from = c.from === left.id ? left : right;
+    const rightward = from === left;
+    const data = { ...c, accent: from.accent };
+    const pick = () => select({ kind: "channel", channel: c });
+    edges.push(
+      { id: `${c.from}-you`, source: c.from, sourceHandle: "out", target: "you",
+        targetHandle: rightward ? "from-left" : "from-right", type: "relay",
+        data: { ...data, label: capital(c.carries), lift: rightward ? 20 : -20, onClick: pick } },
+      { id: `you-${c.to}`, source: "you", sourceHandle: rightward ? "to-right" : "to-left",
+        target: c.to, targetHandle: "in", type: "relay",
+        data: { ...data, label: null, onClick: pick } },
+    );
+  }
+  return { nodes, edges };
+}
+
+// --- app --------------------------------------------------------------------
+function App({ network }) {
+  const [selection, setSelection] = useState(
+    window.innerWidth > 1300 ? { kind: "timeline" } : null);
+  const { nodes, edges } = useMemo(() => graph(network, setSelection), [network]);
+  const relays = network.channels.reduce((n, c) => n + c.relays.length, 0);
+  const latest = Math.max(...network.channels.flatMap((c) => c.relays.map((r) => r.prompted_at)));
+  const onNodeClick = (_, node) => {
+    if (node.type === "you") setSelection({ kind: "timeline" });
+    else setSelection({ kind: "session", session: node.data });
+  };
+  return html`
+    <div class="canvas">
+    <${ReactFlow} key=${selection ? "narrow" : "wide"} nodes=${nodes} edges=${edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
+      fitView fitViewOptions=${{ padding: 0.12 }} minZoom=${0.2} maxZoom=${1.6}
+      nodesConnectable=${false} onNodeClick=${onNodeClick} proOptions=${{ hideAttribution: true }}>
+      <${Background} variant=${BackgroundVariant.Dots} gap=${22} size=${1.4} color="var(--dots)" />
+      <${Controls} showInteractive=${false} position="bottom-left" />
+    <//>
+    <div class="masthead">
+      <div class="eyebrow">Session network</div>
+      <h1>${network.title}</h1>
+      <div class="summary">
+        <span><b>${network.sessions.length}</b> sessions</span>
+        <span><b>${network.channels.length}</b> channels</span>
+        <span><b>${relays}</b> relays</span>
+        <span>last ${clock(latest)}, ${day(latest)}</span>
+      </div>
+    </div>
+    </div>
+    <${Drawer} selection=${selection} network=${network} close=${() => setSelection(null)} />`;
+}
+
+const network = await (await fetch(DATA)).json();
+createRoot(document.getElementById("root")).render(
+  html`<${ReactFlowProvider}><${App} network=${network} /><//>`);
+</script>
+</body>
+</html>

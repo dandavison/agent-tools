@@ -1,0 +1,695 @@
+"""Claude Code transcripts.
+
+One `~/.claude/projects/<encoded-cwd>/<session-uuid>.jsonl` per session. The
+records form a DAG via parentUuid, not a list: rewinding an edited message
+branches it, and compaction starts a fresh root inside the same file. So the
+live thread is the walk back from the leaf, never the order the lines happen
+to be in.
+
+Subagent transcripts, under `<session-uuid>/subagents/`, are not sessions. The
+point of the index is work I took part in, and nobody talked to those.
+"""
+
+import os
+import shlex
+from collections import defaultdict
+from collections.abc import Iterator
+from contextlib import suppress
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+import orjson
+
+from agent_sessions import limits
+from agent_sessions.models import (
+    Block,
+    Boundary,
+    Compaction,
+    Delta,
+    Discovered,
+    Edge,
+    Node,
+    Ran,
+    Running,
+    Said,
+    Session,
+)
+
+CONFIG_DIR = Path.home() / ".claude"
+PROJECTS_DIR = CONFIG_DIR / "projects"
+
+# What I typed, kept apart from the transcripts so the input line can offer it
+# back. Append-only, and every session in the one file.
+HISTORY = "history.jsonl"
+
+# Records that are nodes in the DAG. Everything else is either sidecar state or
+# noise: `attachment` carries injected context, `system` mostly turn timings.
+NODE_TYPES = frozenset({"user", "assistant", "system", "attachment"})
+
+TITLE_LIMIT = 120
+
+# Synthetic user records written when a turn is interrupted. `interruptedMessageId`
+# marks most of them, but 9% of the 187 in the corpus carry no flag at all, so the
+# text is the only reliable signal. Both strings are fixed.
+INTERRUPTIONS = frozenset(
+    {"[Request interrupted by user]", "[Request interrupted by user for tool use]"}
+)
+
+
+class ClaudeSource:
+    """One Claude account: a config dir, of which `root` is the `projects/`."""
+
+    remote_home = "https://claude.ai/code"
+
+    def __init__(self, root: Path = PROJECTS_DIR, name: str = "claude") -> None:
+        self.root = root
+        self.name = name
+
+    def discover(self) -> list[Discovered]:
+        """Only top-level sessions: the glob does not descend into `subagents/`."""
+        return [
+            _discovered(f"{self.name}:{p.stem}", p) for p in sorted(self.root.glob("*/*.jsonl"))
+        ]
+
+    def ingest(self, path: Path) -> Delta | None:
+        return parse(path, _read(path), self.name)
+
+    def live(self) -> dict[str, Running]:
+        return live(self.root.parent / SESSIONS)
+
+    def render_blocks(self, chosen: list[Block], tools: bool) -> Iterator[str]:
+        return render_blocks(chosen, tools=tools)
+
+    def blocks(
+        self, path: Path, since: str = "", tip: bool = False, whole: bool = False
+    ) -> list[Block]:
+        return blocks(_read(path), since=since, tip=tip, whole=whole)
+
+    def leaf(self, path: Path) -> str:
+        return leaf(_read(path))
+
+    def resume_command(self, native_id: str, fork: bool = False, remote: bool = False) -> str:
+        return (
+            shlex.join([*self._account(), "claude", "-r", native_id])
+            + (" --fork-session" if fork else "")
+            + (" --remote-control" if remote else "")
+        )
+
+    def spent(self, path: Path) -> float:
+        return next(
+            (
+                float(r["totalCostUSD"])
+                for r in reversed(_read(path))
+                if r.get("type") == "cost-state"
+            ),
+            0.0,
+        )
+
+    def turn_command(self, native_id: str) -> list[str]:
+        # Not stream-json: what was said is read back off the transcript, so
+        # all that is wanted from the process is the closing summary. My own
+        # settings apply, deliberately — a turn from the channel is allowed
+        # exactly what a turn at the keyboard is.
+        path = self.locate(native_id)
+        spent = self.spent(path) if path else 0.0
+        return [
+            *self._account(),
+            "claude",
+            "-p",
+            "--resume",
+            native_id,
+            "--output-format",
+            "json",
+            # Enforced by the agent, not noticed by us afterwards. Nothing else
+            # here bounds a single turn that runs away inside itself. The agent
+            # checks it against the session's running total, not the turn's.
+            "--max-budget-usd",
+            str(spent + limits.PER_TURN_USD),
+        ]
+
+    def resumable_from(self, path: Path, cwd: str) -> bool:
+        return path.parent.name == encode(cwd)
+
+    def locate(self, native_id: str) -> Path | None:
+        return next(iter(sorted(self.root.glob(f"*/{native_id}.jsonl"))), None)
+
+    def retitle(self, path: Path, title: str) -> None:
+        retitle(path, title)
+
+    def expunge(self, path: Path, into: Path) -> Path:
+        return expunge(path, into, self.root.parent / HISTORY)
+
+    def fork_at(self, path: Path, at_uuid: str) -> str:
+        return fork_at(path, at_uuid)
+
+    def _account(self) -> list[str]:
+        """The default account is the one `claude` uses with CLAUDE_CONFIG_DIR unset."""
+        config_dir = self.root.parent
+        return [] if config_dir == CONFIG_DIR else ["env", f"CLAUDE_CONFIG_DIR={config_dir}"]
+
+
+def encode(cwd: str) -> str:
+    """Claude's name for a cwd's transcript directory. Holds for all 506 of mine."""
+    return cwd.replace("/", "-").replace(".", "-")
+
+
+def _discovered(id: str, path: Path) -> Discovered:
+    stat = path.stat()
+    return Discovered(id=id, path=path, size=stat.st_size, mtime=int(stat.st_mtime))
+
+
+def _read(path: Path) -> list[dict[str, Any]]:
+    """Every record in the file, tolerating a last line still being written.
+
+    A turn appends while progress is read off the same file, so catching it
+    mid-line is the normal case and not a corrupt transcript. Only the last
+    line is allowed to be unfinished; anything else is a real problem and
+    should be loud.
+    """
+    records = []
+    with path.open("rb") as f:
+        lines = [line for line in f if line.strip()]
+    for line in lines[:-1]:
+        records.append(orjson.loads(line))
+    if lines:
+        with suppress(orjson.JSONDecodeError):
+            records.append(orjson.loads(lines[-1]))
+    return records
+
+
+def parse(path: Path, records: list[dict[str, Any]], agent: str = "claude") -> Delta | None:
+    """Fold one transcript into the index's model of it.
+
+    None for the sidecar-only files a session leaves when it is started and
+    abandoned: a title and a mode, but nothing ever said.
+    """
+    nodes = [r for r in records if r.get("type") in NODE_TYPES and r.get("uuid")]
+    if not nodes:
+        return None
+
+    session = _session(path, records, nodes, agent)
+    branch_points = _branch_points(nodes)
+    active = _active_branch(records, nodes)
+
+    dag = _nodes(session.id, nodes, branch_points)
+    compactions = _compactions(session.id, records)
+    _measure(session, nodes, active, dag, compactions)
+
+    return Delta(
+        session=session,
+        nodes=dag,
+        edges=_edges(session.id, records, agent),
+        compactions=compactions,
+    )
+
+
+def _session(
+    path: Path, records: list[dict[str, Any]], nodes: list[dict[str, Any]], agent: str
+) -> Session:
+    first, last = nodes[0], nodes[-1]
+    native_id = first.get("sessionId") or path.stem
+    state = _sidecar_state(records)
+    return Session(
+        id=f"{agent}:{native_id}",
+        agent=agent,
+        native_id=native_id,
+        path=str(path),
+        cwd=state.get("relocatedCwd") or first.get("cwd"),
+        git_branch=first.get("gitBranch"),
+        title=state.get("customTitle") or state.get("aiTitle") or last.get("slug"),
+        leaf_uuid=state.get("leafUuid"),
+        is_sidechain=bool(first.get("isSidechain")),
+        session_kind=first.get("sessionKind"),
+        file_mtime=int(path.stat().st_mtime),
+    )
+
+
+def _sidecar_state(records: list[dict[str, Any]]) -> dict[str, str]:
+    """Sidecar records are last-write-wins key/value updates appended to the file."""
+    keys = {
+        "custom-title": "customTitle",
+        "ai-title": "aiTitle",
+        "last-prompt": "leafUuid",
+        "relocated": "relocatedCwd",
+    }
+    state: dict[str, str] = {}
+    for record in records:
+        key = keys.get(record.get("type", ""))
+        if key and record.get(key):
+            state[key] = record[key]
+    return state
+
+
+def _branch_points(nodes: list[dict[str, Any]]) -> set[str]:
+    """A node the thread was rewound to: more than one record claims it as parent."""
+    children: dict[str, set[str]] = defaultdict(set)
+    for node in nodes:
+        if parent := node.get("parentUuid"):
+            children[parent].add(node["uuid"])
+    return {uuid for uuid, kids in children.items() if len(kids) > 1}
+
+
+def _active_branch(
+    records: list[dict[str, Any]], nodes: list[dict[str, Any]], tip: bool = False
+) -> list[dict[str, Any]]:
+    """The live thread: walk parents back from where it ends, then read it forwards.
+
+    Where it ends is the leaf the `last-prompt` sidecar names. Without one — 1
+    file in 3 has none — it is simply the last record written.
+
+    That record is written when a turn ends, so it names the branch as of then
+    and nothing since: a turn in flight hangs below it, and a prompt can land
+    beside it rather than below it. `tip` asks instead for the last record
+    appended after it, which is what both of those look like, and is where the
+    thread has actually got to. A leaf written after the records below it is
+    the other case — a rewind — and there the leaf is exactly the answer.
+    """
+    by_uuid = {n["uuid"]: n for n in nodes}
+    leaf = by_uuid.get(_sidecar_state(records).get("leafUuid") or "")
+    if leaf is None:
+        return _thread_to(by_uuid, nodes[-1])
+    appended = _appended_after_the_leaf(records) if tip else []
+    return _thread_to(by_uuid, appended[-1] if appended else leaf)
+
+
+def _appended_after_the_leaf(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The nodes written after the leaf was, which is everything it cannot know."""
+    recorded = max(
+        (i for i, r in enumerate(records) if r.get("type") == "last-prompt" and r.get("leafUuid")),
+        default=-1,
+    )
+    return [r for r in records[recorded + 1 :] if r.get("type") in NODE_TYPES and r.get("uuid")]
+
+
+def _thread_to(
+    by_uuid: dict[str, dict[str, Any]], node: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    chain = []
+    seen = set()
+    while node and node["uuid"] not in seen:
+        seen.add(node["uuid"])
+        chain.append(node)
+        node = by_uuid.get(node.get("parentUuid") or "")
+    chain.reverse()
+    return chain
+
+
+def _nodes(session_id: str, nodes: list[dict[str, Any]], branch_points: set[str]) -> list[Node]:
+    """The whole DAG, prose or not, on every branch — abandoned ones included.
+
+    A thread is frequently rewound at a tool call or a `turn_duration` record
+    rather than at something anyone said, so keeping only prose would hide most
+    of the branching: 9 branch points survive that filter, against 304 real ones.
+    """
+    return [
+        Node(
+            session_id=session_id,
+            uuid=node["uuid"],
+            parent_uuid=node.get("parentUuid"),
+            seq=seq,
+            role=_role(node),
+            ts=_epoch(node.get("timestamp")),
+            text=_text(node),
+            request_id=node.get("requestId"),
+            context_tokens=_context_tokens(node),
+            is_branch_point=node["uuid"] in branch_points,
+        )
+        for seq, node in enumerate(nodes)
+    ]
+
+
+def _role(node: dict[str, Any]) -> str:
+    if node.get("isCompactSummary"):
+        return "summary"
+    return str(node.get("type"))
+
+
+def _text(node: dict[str, Any]) -> str:
+    """Prose only. Tool calls, results and interruptions are not things anyone typed."""
+    if node.get("type") not in ("user", "assistant"):
+        return ""
+    if node.get("isMeta") or node.get("interruptedMessageId"):
+        return ""
+    content = node.get("message", {}).get("content")
+    if isinstance(content, str):
+        text = content.strip()
+    elif isinstance(content, list):
+        parts = [b["text"] for b in content if isinstance(b, dict) and b.get("type") == "text"]
+        text = "\n".join(parts).strip()
+    else:
+        return ""
+    return "" if text in INTERRUPTIONS else text
+
+
+def _compactions(session_id: str, records: list[dict[str, Any]]) -> list[Compaction]:
+    out = []
+    for record in records:
+        if record.get("subtype") != "compact_boundary":
+            continue
+        meta = record.get("compactMetadata", {})
+        preserved = meta.get("preservedMessages", {})
+        out.append(
+            Compaction(
+                session_id=session_id,
+                uuid=record["uuid"],
+                ts=_epoch(record.get("timestamp")),
+                trigger=meta.get("trigger", ""),
+                pre_tokens=meta.get("preTokens", 0),
+                post_tokens=meta.get("postTokens", 0),
+                logical_parent_uuid=record.get("logicalParentUuid"),
+                anchor_uuid=preserved.get("anchorUuid"),
+                preserved_count=len(preserved.get("uuids", [])),
+            )
+        )
+    return out
+
+
+def _edges(session_id: str, records: list[dict[str, Any]], agent: str) -> list[Edge]:
+    """A fork reuses the parent's message uuid as its own root, so the splice is exact."""
+    for record in records:
+        if fork := record.get("forkedFrom"):
+            return [
+                Edge(
+                    child=session_id,
+                    parent=f"{agent}:{fork['sessionId']}",
+                    kind="fork",
+                    at_uuid=fork.get("messageUuid"),
+                )
+            ]
+    return []
+
+
+def _measure(
+    session: Session,
+    nodes: list[dict[str, Any]],
+    active: list[dict[str, Any]],
+    dag: list[Node],
+    compactions: list[Compaction],
+) -> None:
+    """Counts and token totals.
+
+    Turn counts cover the whole transcript, because everything I typed I really
+    typed, even on a branch since abandoned — and a file can hold several roots,
+    so the live thread is often not all of it. Context is different: it is the
+    latest value on the live thread, and not a sum.
+    """
+    messages = [n for n in nodes if n.get("type") in ("user", "assistant")]
+    stamps = [t for n in nodes if (t := _epoch(n.get("timestamp")))]
+    assistants = [n for n in active if n.get("type") == "assistant"]
+
+    session.n_messages = len(messages)
+    session.n_user_turns = sum(1 for n in dag if n.role == "user" and n.text)
+    session.started_at = min(stamps, default=None)
+    session.ended_at = max(stamps, default=None)
+    session.model = next(
+        (m for n in reversed(assistants) if (m := n.get("message", {}).get("model"))), None
+    )
+    session.context_tokens = next((c for n in reversed(assistants) if (c := _context_tokens(n))), 0)
+    session.output_tokens = _output_tokens(assistants)
+    session.dropped_tokens = max((c.pre_tokens - c.post_tokens for c in compactions), default=0)
+    if not session.title:
+        session.title = _title_from(dag)
+
+
+def _output_tokens(assistants: list[dict[str, Any]]) -> int:
+    """One API response spans several records sharing a requestId and one usage object."""
+    seen: dict[str, int] = {}
+    for i, node in enumerate(assistants):
+        usage = node.get("message", {}).get("usage") or {}
+        seen[node.get("requestId") or f"#{i}"] = usage.get("output_tokens", 0)
+    return sum(seen.values())
+
+
+def _context_tokens(node: dict[str, Any]) -> int:
+    usage = node.get("message", {}).get("usage") or {}
+    return (
+        usage.get("input_tokens", 0)
+        + usage.get("cache_read_input_tokens", 0)
+        + usage.get("cache_creation_input_tokens", 0)
+    )
+
+
+def _title_from(dag: list[Node]) -> str | None:
+    """Last resort when the transcript carries no title of its own: my opening prompt."""
+    first = next((n.text for n in dag if n.role == "user" and n.text), None)
+    return " ".join(first.split())[:TITLE_LIMIT] if first else None
+
+
+def _epoch(timestamp: str | None) -> int | None:
+    if not timestamp:
+        return None
+    return int(datetime.fromisoformat(timestamp).timestamp())
+
+
+def blocks(
+    records: list[dict[str, Any]], whole: bool = False, since: str = "", tip: bool = False
+) -> list[Block]:
+    """The conversation, in the order it happened, as the shape a reader wants.
+
+    The one parser. Everywhere a conversation is shown — the terminal, the
+    pages `serve` puts up, a comment on the control channel — is a formatter
+    over this and nothing more, so none of them can drift from the others as
+    the transcript format moves.
+
+    A call and its result arrive on separate records and are put back together
+    here, because no reader has ever wanted them apart. `since` gives only what
+    came after a point, which is how a turn just run is told from the rest.
+    """
+    nodes = [r for r in records if r.get("type") in NODE_TYPES and r.get("uuid")]
+    if not whole:
+        nodes = _active_branch(records, nodes, tip=tip)
+    if since:
+        nodes = _after(nodes, since)
+    boundaries = {c.uuid for c in _compactions("", records)}
+    results = _tool_results(nodes)
+
+    out: list[Block] = []
+    for node in nodes:
+        if node["uuid"] in boundaries:
+            meta = node.get("compactMetadata", {})
+            out.append(
+                Boundary(
+                    trigger=str(meta.get("trigger", "")),
+                    pre_tokens=int(meta.get("preTokens", 0)),
+                    post_tokens=int(meta.get("postTokens", 0)),
+                )
+            )
+        elif text := _text(node):
+            out.append(Said(role=_role(node), text=text, uuid=str(node["uuid"])))
+        else:
+            out.extend(_calls(node, results))
+    return out
+
+
+def leaf(records: list[dict[str, Any]]) -> str:
+    """Where the thread currently ends, for asking what came after it later."""
+    nodes = [r for r in records if r.get("type") in NODE_TYPES and r.get("uuid")]
+    active = _active_branch(records, nodes)
+    return str(active[-1]["uuid"]) if active else ""
+
+
+def _after(nodes: list[dict[str, Any]], since: str) -> list[dict[str, Any]]:
+    for i, node in enumerate(nodes):
+        if node["uuid"] == since:
+            return nodes[i + 1 :]
+    return nodes
+
+
+def _tool_results(nodes: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        block["tool_use_id"]: block
+        for node in nodes
+        for block in _content(node)
+        if block.get("type") == "tool_result" and block.get("tool_use_id")
+    }
+
+
+def _calls(node: dict[str, Any], results: dict[str, dict[str, Any]]) -> Iterator[Ran]:
+    for block in _content(node):
+        if block.get("type") != "tool_use":
+            continue
+        result = results.get(block.get("id", ""), {})
+        yield Ran(
+            tool=str(block.get("name", "")),
+            input=block.get("input") or {},
+            output=_result_text(result.get("content")),
+            is_error=bool(result.get("is_error")),
+        )
+
+
+def _content(node: dict[str, Any]) -> list[dict[str, Any]]:
+    content = node.get("message", {}).get("content")
+    return [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
+
+
+def render_blocks(chosen: list[Block], tools: bool) -> Iterator[str]:
+    """A stretch of a conversation as markdown. A formatter over `blocks`.
+
+    The index holds no tool output by design, so this is the only way to see
+    what was actually run. Whole sessions and single turns differ only in how
+    many blocks arrive, so one formatter serves both and neither can drift.
+    """
+    for block in chosen:
+        match block:
+            case Boundary():
+                yield f"\n---\n\n*Compacted ({block.trigger}): "
+                yield f"{block.pre_tokens:,} → {block.post_tokens:,} tokens*\n"
+            case Said():
+                yield f"\n## {block.role}\n\n{block.text}\n"
+            case Ran() if tools:
+                yield f"\n### {block.tool}\n\n```json\n{_json(block.input)}\n```\n"
+                yield f"\n```\n{block.output}\n```\n"
+            case _:
+                pass
+
+
+def _result_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
+    return ""
+
+
+def _json(value: Any) -> str:
+    return orjson.dumps(value, option=orjson.OPT_INDENT_2).decode()
+
+
+def fork_at(path: Path, at_uuid: str) -> str:
+    """Write a session that ends where `at_uuid` did, and return its native id.
+
+    Claude resumes a session at its leaf and nowhere else, so picking one up
+    from earlier means handing it a session whose leaf is that point. This is
+    what its own fork writes — the ancestry of the leaf, under a new session
+    id, every record stamped with where it came from — stopped earlier. The
+    session it came from is not touched.
+
+    A point names an exchange, not a record, so what is written ends where that
+    exchange did: picking up at a prompt carries the answer to it, which is the
+    state the session was actually in.
+    """
+    records = _read(path)
+    nodes = [r for r in records if r.get("type") in NODE_TYPES and r.get("uuid")]
+    by_uuid = {n["uuid"]: n for n in nodes}
+    if at_uuid not in by_uuid:
+        raise ValueError(f"{at_uuid} is not a point in {path.name}.")
+
+    thread = {n["uuid"] for n in _thread_to(by_uuid, _end_of_turn(nodes, by_uuid[at_uuid]))}
+    parent = nodes[0].get("sessionId") or path.stem
+    native = str(uuid4())
+    path.with_name(f"{native}.jsonl").write_bytes(
+        b"".join(
+            orjson.dumps(_forked(r, native, parent)) + b"\n"
+            for r in records
+            if r.get("uuid") in thread
+        )
+    )
+    return native
+
+
+def _end_of_turn(nodes: list[dict[str, Any]], node: dict[str, Any]) -> dict[str, Any]:
+    """The last record before the next prompt, following children down.
+
+    The most recently written child is taken at a fork, so a rewound exchange
+    resolves to the answer that stood rather than the one it replaced.
+    """
+    children: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for n in nodes:
+        if parent := n.get("parentUuid"):
+            children[parent].append(n)
+    seen = set()
+    while (below := children.get(node["uuid"])) and node["uuid"] not in seen:
+        seen.add(node["uuid"])
+        if below[-1].get("type") == "user" and _text(below[-1]):
+            break
+        node = below[-1]
+    return node
+
+
+def _forked(record: dict[str, Any], native: str, parent: str) -> dict[str, Any]:
+    return record | {
+        "sessionId": native,
+        "forkedFrom": {"sessionId": parent, "messageUuid": record["uuid"]},
+    }
+
+
+def retitle(path: Path, title: str) -> None:
+    """The record Claude writes when a title is changed in its own UI.
+
+    Sidecar records are last-write-wins, so appending one is the whole of it.
+    """
+    record = {"type": "custom-title", "customTitle": title, "sessionId": path.stem}
+    with path.open("ab") as f:
+        f.write(orjson.dumps(record) + b"\n")
+
+
+def expunge(path: Path, into: Path, history: Path) -> Path:
+    """Move a session out of Claude's reach, prompts and tool output included.
+
+    The directory beside the transcript holds what was too large to inline —
+    tool results, subagent transcripts — and goes with it. The transcript keeps
+    the prompts, so dropping them from the recall file loses nothing.
+    """
+    destination = into / path.parent.name
+    destination.mkdir(parents=True, exist_ok=True)
+    moved = destination / path.name
+    if (beside := path.with_suffix("")).is_dir():
+        beside.replace(destination / beside.name)
+    path.replace(moved)
+    _forget_prompts(history, path.stem)
+    return moved
+
+
+def _forget_prompts(history: Path, native_id: str) -> None:
+    """Drop this session's prompts, keeping whatever arrived while we read.
+
+    Other sessions append to this file as this runs, and it is only ever
+    appended to, so anything past where the read stopped is carried over
+    untouched rather than lost.
+    """
+    if not history.exists():
+        return
+    read = _read_bytes(history)
+    keep = [line for line in read.splitlines(keepends=True) if native_id.encode() not in line]
+    with history.open("rb") as f:
+        f.seek(len(read))
+        arrived_since = f.read()
+    temp = history.with_suffix(f".{os.getpid()}.tmp")
+    temp.write_bytes(b"".join(keep) + arrived_since)
+    temp.replace(history)
+
+
+def _read_bytes(path: Path) -> bytes:
+    return path.read_bytes()
+
+
+SESSIONS = "sessions"
+
+
+def live(sessions_dir: Path) -> dict[str, Running]:
+    """Session id -> what is running it, for the sessions running right now.
+
+    Claude keeps a file per process here. They outlive the process that wrote
+    them, so a pid that is gone means a stale entry, not a live session.
+    """
+    running = {}
+    for path in sessions_dir.glob("*.json"):
+        record = orjson.loads(path.read_bytes())
+        pid = record.get("pid")
+        if (sid := record.get("sessionId")) and _alive(pid):
+            running[sid] = Running(pid=pid, status=str(record.get("status", "running")))
+    return running
+
+
+def _alive(pid: int | None) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, OverflowError, ValueError):
+        return False
+    except PermissionError:
+        return True
+    return True

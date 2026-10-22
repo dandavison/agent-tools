@@ -1,0 +1,42 @@
+[project]
+name = "agent-sessions"
+version = "0.1.0"
+description = "Index and resume the work done with coding agents"
+readme = "README.md"
+authors = [
+    { name = "Dan Davison", email = "dandavison7@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.4.2",
+    "cryptography>=50.0.0",
+    "httpx>=0.28.1",
+    "markdown-it-py[linkify]>=4.2.0",
+    "orjson>=3.11.9",
+    "pygments>=2.20.0",
+    "pyjwt>=2.13.0",
+    "segno>=1.6.6",
+]
+
+[project.scripts]
+agent-sessions = "agent_sessions.cli:run"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.1",
+    "ty>=0.0.65",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

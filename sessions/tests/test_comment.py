@@ -1,0 +1,203 @@
+"""A turn as a GitHub comment, which is where the reading happens now.
+
+GitHub renders markdown with syntax highlighting and collapses `<details>`, so
+the two views asked for come free if the turn is laid out for them: prose at
+the top level, every tool call folded away under it. The third view — just my
+turns, without any of the agent's — is not something a comment can offer, since
+GitHub has no collapse-all, so the issue body carries it instead.
+
+Tool output goes to a third party the moment it is posted, and it holds things
+that would never be committed. Redaction is a filter over everything on its way
+out, not a thing each caller remembers.
+"""
+
+from agent_sessions import comment
+from agent_sessions.models import Ran, Said, turns
+
+
+def said(s: str, role: str = "assistant") -> Said:
+    return Said(role=role, text=s)
+
+
+def ran(name: str, output: str = "", is_error: bool = False, **input: object) -> Ran:
+    return Ran(tool=name, input=input, output=output, is_error=is_error)
+
+
+DONE = {"num_turns": 2, "total_cost_usd": 57.95, "turn_cost_usd": 0.03}
+
+
+# --- what is said comes first, and what was run folds away -------------------
+
+
+def test_what_the_agent_said_is_at_the_top_level() -> None:
+    """Read on a phone, from a notification: the answer should not need a tap."""
+    out = comment.render([said("Replaced the retry loop.")], DONE)
+    assert "Replaced the retry loop." in out
+    assert "<details" not in out.split("Replaced the retry loop.")[0]
+
+
+def test_the_footer_gives_what_the_turn_cost_not_the_sessions_running_total() -> None:
+    out = comment.render([said("Done.")], DONE)
+    assert "$0.03" in out
+    assert "$57.95" not in out
+
+
+def test_the_answer_comes_before_the_work_that_produced_it() -> None:
+    """A turn runs tools first and answers last, and a comment opens at the top.
+
+    Posted in the order it happened, the two sentences I asked for sat under six
+    kilobytes of folded tool calls. A comment is a report, not a transcript; the
+    transcript keeps the chronology.
+    """
+    out = comment.render([ran("Read", file_path="/x/a.py"), said("The answer.")], DONE)
+    assert out.index("The answer.") < out.index("<details")
+
+
+def test_a_tool_call_is_folded_away() -> None:
+    out = comment.render([ran("Bash", command="echo hello", output="hello")], DONE)
+    assert "<details>" in out
+    assert "echo hello" in out
+    assert "hello" in out
+
+
+def test_the_fold_says_what_was_run_without_being_opened() -> None:
+    """A summary that reads `Bash` and nothing else is a summary worth nothing."""
+    out = comment.render([ran("Bash", command="uv run pytest -q")], DONE)
+    summary = out.split("<summary>")[1].split("</summary>")[0]
+    assert "Bash" in summary
+    assert "uv run pytest -q" in summary
+
+
+def test_only_the_agents_side_is_posted() -> None:
+    """My own prompt is already the comment above; repeating it back is noise."""
+    out = comment.render([said("try it with -x", role="user"), said("Done.")], DONE)
+    assert "try it with -x" not in out
+    assert "Done." in out
+
+
+# --- highlighting, which is the reason for using GitHub at all ---------------
+
+
+def test_a_shell_command_is_fenced_as_shell() -> None:
+    out = comment.render([ran("Bash", command="ls -la")], DONE)
+    assert "```sh" in out
+
+
+def test_an_edit_is_fenced_by_the_language_of_the_file() -> None:
+    out = comment.render([ran("Edit", file_path="/x/thing.py", new_string="x = 1")], DONE)
+    assert "```python" in out
+
+
+def test_a_tool_with_no_language_of_its_own_is_fenced_as_json() -> None:
+    out = comment.render([ran("Grep", pattern="def ", glob="*.py")], DONE)
+    assert "```json" in out
+
+
+# --- what must not leave this machine ----------------------------------------
+
+
+def test_an_api_key_in_tool_output_is_not_posted() -> None:
+    """The whole risk of the design in one test: output holds what commits never do."""
+    leaked = "export ANTHROPIC_API_KEY=sk-ant-api03-" + "A" * 95
+    out = comment.render([ran("Bash", command="cat secret.sh", output=leaked)])
+    assert "sk-ant-api03-" not in out
+    assert comment.REDACTED in out
+
+
+def test_a_github_token_is_not_posted() -> None:
+    out = comment.render([ran("Bash", command="gh auth token", output="gho_" + "b" * 36)])
+    assert "gho_" not in out
+
+
+def test_redaction_reaches_what_the_agent_says_too() -> None:
+    """It reads files; it can repeat what it read."""
+    out = comment.render([said("The key is sk-ant-api03-" + "C" * 95)])
+    assert "sk-ant-api03-" not in out
+
+
+# --- a comment GitHub will accept --------------------------------------------
+
+
+def test_a_huge_tool_result_does_not_make_a_comment_github_refuses() -> None:
+    """65,536 characters, and a test run clears that on its own."""
+    out = comment.render([ran("Bash", command="pytest", output="x" * 200_000)], DONE)
+    assert len(out) <= comment.LIMIT
+
+
+def test_truncation_says_that_it_truncated() -> None:
+    out = comment.render([ran("Bash", command="pytest", output="x" * 200_000)], DONE)
+    assert "truncated" in out.lower()
+
+
+# --- the issue body, which is the view a comment cannot give ------------------
+
+
+def test_the_body_carries_the_frontmatter_needed_to_pick_the_session_up() -> None:
+    session = {"id": "claude:7e90a7c6", "project": "wormhole", "cwd": "/Users/dan/src/wormhole"}
+    out = comment.body(session, [])
+    assert "claude:7e90a7c6" in out
+    assert "wormhole" in out
+    assert "/Users/dan/src/wormhole" in out
+
+
+def test_the_body_is_a_table_so_a_phone_can_read_it() -> None:
+    out = comment.body({"id": "claude:7e90a7c6"}, [])
+    assert "|" in out and "---" in out
+
+
+def test_the_body_holds_just_my_turns() -> None:
+    """The view GitHub cannot give in the timeline: mine, without any of the agent's."""
+    out = comment.body({"id": "claude:7e90a7c6"}, ["why is conform relocating", "try it with -x"])
+    assert "why is conform relocating" in out
+    assert "try it with -x" in out
+
+
+def test_the_frontmatter_survives_a_round_trip() -> None:
+    """It is read back off the issue to know which session a comment belongs to."""
+    session = {"id": "claude:7e90a7c6", "project": "wormhole", "cwd": "/tmp/x"}
+    assert comment.session_id(comment.body(session, [])) == "claude:7e90a7c6"
+
+
+# --- where the session was before this turn ----------------------------------
+
+
+def test_an_answer_records_where_the_session_was_before_it() -> None:
+    """Rewinding needs a transcript point, and a comment is what I tap to ask for it."""
+    turn = comment.Turn("u1", "why?", [said("Done.")])
+    out = comment.render_turn(turn, marks={comment.AT: "9f3c1d20"})
+    assert comment.point(out) == "9f3c1d20"
+
+
+def test_an_answer_without_a_point_has_none_to_read_back() -> None:
+    assert comment.point(comment.render_turn(comment.Turn("u1", "why?", [said("Done.")]))) == ""
+
+
+def test_what_only_the_thread_knew_survives_a_re_rendering() -> None:
+    """Re-rendering from the transcript would otherwise drop them every pass."""
+    turn = comment.Turn("u1", "why?", [said("Done.")])
+    was = comment.render_turn(turn, marks={comment.AT: "9f3c1d20", comment.BY: "42"})
+    again = comment.render_turn(turn, marks=comment.marks_of(was))
+    assert comment.point(again) == "9f3c1d20"
+    assert comment.asked_by(again) == 42
+
+
+# --- the thread as a projection of the session -------------------------------
+
+
+def asked(s: str, uuid: str) -> Said:
+    return Said(role="user", text=s, uuid=uuid)
+
+
+def test_a_rendered_turn_says_which_turn_it_is() -> None:
+    (turn,) = turns([asked("why?", "u1"), said("because")])
+    body = comment.render_turn(turn)
+    assert comment.turn_key(body) == "u1"
+    assert "because" in body
+
+
+def test_a_rendered_turn_says_which_comment_asked_for_it() -> None:
+    """The thread owns its own ids, so consumption is recorded where it is known."""
+    (turn,) = turns([asked("why?", "u1"), said("because")])
+    body = comment.render_turn(turn, marks={comment.BY: "4242"})
+    assert comment.asked_by(body) == 4242
+    assert comment.asked_by(comment.render_turn(turn)) == 0

@@ -1,0 +1,1091 @@
+"""The loop: notice a prompt, run the turn it asks for, post what came back.
+
+This is the only part that runs an agent without me watching, so what it
+refuses matters as much as what it does. It will not take a prompt up twice, it
+will not touch a session that is open in a terminal, and it says so in the
+thread rather than failing where nobody is looking.
+"""
+
+import time
+from dataclasses import dataclass, field
+
+import pytest
+
+from agent_sessions import attend, channel, comment, index, limits
+from agent_sessions.models import Block, Ran, Running, Said
+
+
+@dataclass
+class FakeChannel:
+    """A control channel that keeps its issues and comments in memory."""
+
+    issues_: list[channel.Issue]
+    comments_: dict[int, list[channel.Comment]] = field(default_factory=dict)
+    posted: list[tuple[int, str]] = field(default_factory=list)
+    edited: list[tuple[int, str]] = field(default_factory=list)
+    taken: list[int] = field(default_factory=list)
+    bodies: dict[int, str] = field(default_factory=dict)
+    titles: list[str] = field(default_factory=list)
+    deleted: list[int] = field(default_factory=list)
+    done: list[int] = field(default_factory=list)
+    fresh: bool = False
+    reacted: list[tuple[int, str]] = field(default_factory=list)
+
+    def open(self, title: str, body: str) -> channel.Issue:
+        self.titles.append(title)
+        made = channel.Issue(number=100 + len(self.issues_), title=title, body=body, url="u")
+        self.issues_.append(made)
+        return made
+
+    def issues(self) -> list[channel.Issue]:
+        return self.issues_
+
+    def issue(self, number: int) -> channel.Issue:
+        return next(i for i in self.issues_ if i.number == number)
+
+    def comments(self, number: int) -> list[channel.Comment]:
+        return self.comments_.get(number, [])
+
+    def post(self, number: int, body: str) -> int:
+        """Writes are visible to reads, as they are on GitHub.
+
+        The double used to record a write and go on returning the old list, so
+        reconciling could not see the comment a turn had just written and
+        posted a second one. A double that cannot see its own writes agrees
+        with whatever you believed.
+        """
+        self.posted.append((number, body))
+        made = 900 + len(self.posted)
+        self.comments_.setdefault(number, []).append(
+            channel.Comment(id=made, body=body, author="agent[bot]")
+        )
+        return made
+
+    def edit(self, comment_id: int, body: str) -> None:
+        self.edited.append((comment_id, body))
+        for number, cs in self.comments_.items():
+            self.comments_[number] = [
+                channel.Comment(id=c.id, body=body, author=c.author) if c.id == comment_id else c
+                for c in cs
+            ]
+
+    def delete(self, comment_id: int) -> None:
+        self.deleted.append(comment_id)
+        for number, cs in self.comments_.items():
+            self.comments_[number] = [c for c in cs if c.id != comment_id]
+
+    def take_up(self, comment_id: int) -> None:
+        self.taken.append(comment_id)
+
+    def react(self, comment_id: int, content: str) -> None:
+        self.reacted.append((comment_id, content))
+
+    def mark_done(self, comment_id: int) -> None:
+        self.done.append(comment_id)
+
+    def set_body(self, number: int, body: str) -> None:
+        self.bodies[number] = body
+
+
+SESSION = {
+    "id": "claude:7e90",
+    "agent": "claude",
+    "native_id": "7e90",
+    "cwd": "/tmp/x",
+    "project": "wormhole",
+    "path": "/tmp/x/7e90.jsonl",
+}
+
+
+def issue(session_id: str = "claude:7e90") -> channel.Issue:
+    return channel.Issue(number=4, title="t", body=f"| session | {session_id} |", url="")
+
+
+def prompt(id: int = 11, body: str = "try it with -x", ago: float = 30.0) -> channel.Comment:
+    """A comment of mine. `ago` is how long since I wrote it, which now matters:
+    old ones are never run, and two inside a minute are not something I do."""
+    return channel.Comment(id=id, body=body, author="dandavison", created=time.time() - ago)
+
+
+@pytest.fixture
+def turns(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
+    """What the agent was asked to do, without asking it."""
+    ran: list[dict] = []
+
+    def fake(session: dict, text: str, showing=None, tag="") -> tuple[list[Said], dict, str]:
+        ran.append({"session": session["id"], "prompt": text})
+        return [Said(role="assistant", text="Done.")], {}, "leafbefore"
+
+    monkeypatch.setattr(attend, "run_turn", fake)
+    monkeypatch.setattr(index.SOURCES["claude"], "live", dict)
+    # The body is read off the transcript now, and these sessions have none.
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "blocks", lambda path, since="", tip=False, whole=False: []
+    )
+    return ran
+
+
+@pytest.fixture
+def found(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(attend, "lookup", lambda conn, id: SESSION if id == "claude:7e90" else None)
+
+
+# --- the loop ----------------------------------------------------------------
+
+
+def test_a_comment_of_mine_is_a_prompt(turns: list[dict], found) -> None:
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert turns[0]["prompt"] == "try it with -x"
+
+
+def test_the_answer_goes_back_to_the_issue_it_came_from(turns: list[dict], found) -> None:
+    """On the issue that asked, and posted rather than edited into the note.
+
+    GitHub notifies on a comment appearing and says nothing about an edit, so
+    an answer written into the progress note reaches an open page and nobody
+    else. From a phone that is indistinguishable from a turn that died.
+    """
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert c.posted[0][0] == 4
+    assert "Done." in c.posted[-1][1]
+
+
+def test_a_prompt_is_taken_up_before_it_is_run(turns: list[dict], found) -> None:
+    """A turn takes minutes. Without the eyes first, it looks like nothing happened."""
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert c.taken == [11]
+
+
+def test_what_it_wrote_is_not_read_back_as_a_prompt(turns: list[dict], found) -> None:
+    """The loop that would never end."""
+    ours = channel.Comment(id=12, body=f"{channel.MARKER}\nDone.", author="dandavison")
+    c = FakeChannel([issue()], {4: [ours]})
+    attend.once(c, conn=None)
+    assert turns == []
+
+
+def test_the_eyes_alone_do_not_mean_a_prompt_is_done(turns: list[dict], found) -> None:
+    """This asserted the opposite, and the opposite was the bug.
+
+    Eyes with no reply is what a turn killed part way leaves behind, and
+    treating it as done is what dropped that work. A reply is what settles it.
+    """
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert turns[0]["prompt"] == "try it with -x"
+
+
+def test_every_prompt_waiting_is_answered(turns: list[dict], found) -> None:
+    c = FakeChannel([issue()], {4: [prompt(11, "first", 300), prompt(12, "second", 120)]})
+    attend.once(c, conn=None)
+    assert [t["prompt"] for t in turns] == ["first", "second"]
+
+
+def test_the_body_is_kept_up_to_date(turns: list[dict], found) -> None:
+    """The one view the timeline cannot give, so it has to be maintained.
+
+    It used to assert that a posted comment appears here; it asserts the
+    frontmatter now, because the list beneath comes from the transcript rather
+    than from the thread.
+    """
+    c = FakeChannel([issue()], {4: [prompt(11, "first")]})
+    attend.once(c, conn=None)
+    assert "claude:7e90" in c.bodies[4]
+
+
+# --- what it refuses ----------------------------------------------------------
+
+
+def test_a_session_open_in_a_terminal_is_taken_over(
+    turns: list[dict], found, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """I am not at that keyboard. The pane loses; the prompt I just sent wins.
+
+    Two agents on one transcript fork it and then fight over which branch is
+    live, so one of them has to go, and it is not the one I am talking to.
+    """
+    killed: list[int] = []
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "live", lambda: {"7e90": Running(pid=42, status="idle")}
+    )
+    monkeypatch.setattr(attend, "take_over", lambda pid: killed.append(pid))
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert killed == [42]
+    assert turns[0]["prompt"] == "try it with -x"
+
+
+def test_taking_a_session_over_is_said(
+    turns: list[dict], found, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """Coming home to a closed pane should not be a mystery.
+
+    Said in the log rather than the comment: the comment is a rendering of the
+    session, and this is a fact about the operation, which the session has no
+    record of. Written into the rendering it would be dropped on the next pass.
+    """
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "live", lambda: {"7e90": Running(pid=42, status="idle")}
+    )
+    monkeypatch.setattr(attend, "take_over", lambda pid: None)
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert "terminal" in capsys.readouterr().err.lower()
+
+
+def test_an_issue_naming_no_session_is_said_to_be_wrong(turns: list[dict], found) -> None:
+    c = FakeChannel([issue(session_id="claude:nope")], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert turns == []
+    assert "claude:nope" in c.posted[0][1]
+
+
+def test_an_issue_naming_no_session_is_said_once_not_once_a_pass(turns: list[dict], found) -> None:
+    """A stale row is never consumed, so the prompt waits for as long as the loop runs.
+
+    Said per pass, one such issue posted 1,653 copies of the same sentence and
+    sent an email for each.
+    """
+    c = FakeChannel([issue(session_id="claude:nope")], {4: [prompt()]})
+    for _ in range(5):
+        attend.once(c, conn=None)
+    assert len(c.posted) == 1
+
+
+def test_an_issue_without_frontmatter_is_ignored_not_guessed_at(turns: list[dict], found) -> None:
+    """A stray issue in the repo is not an invitation to run an agent."""
+    c = FakeChannel(
+        [channel.Issue(number=9, title="t", body="just a note", url="")], {9: [prompt()]}
+    )
+    attend.once(c, conn=None)
+    assert turns == []
+    assert c.posted == []
+
+
+# --- opening the issue that makes a session reachable -------------------------
+
+
+def test_a_session_gets_one_issue_not_one_per_visit(turns: list[dict]) -> None:
+    """Asking twice is the normal case: the row is tapped whenever it is wanted."""
+    c = FakeChannel([issue()])
+    first = attend.issue_for(c, SESSION)
+    second = attend.issue_for(c, SESSION)
+    assert first.number == second.number == 4
+
+
+def test_a_session_with_no_issue_yet_gets_one(turns: list[dict], monkeypatch) -> None:
+    monkeypatch.setattr(index.SOURCES["claude"], "leaf", lambda path: "leaf-now")
+    opened = FakeChannel([])
+    made = attend.issue_for(opened, SESSION)
+    assert made.session_id == "claude:7e90"
+
+
+def test_the_new_issue_is_titled_as_the_session_is(turns: list[dict], monkeypatch) -> None:
+    monkeypatch.setattr(index.SOURCES["claude"], "leaf", lambda path: "leaf-now")
+    opened = FakeChannel([])
+    attend.issue_for(opened, SESSION | {"title": "why is conform relocating"})
+    assert opened.titles == ["why is conform relocating"]
+
+
+# --- what it says about itself, and surviving a bad pass ---------------------
+
+
+def test_a_pass_that_fails_does_not_end_the_loop(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """A blip at GitHub while I am out must not be the end of it.
+
+    The loop runs for hours unattended; an exception out of one pass is a
+    reason to say so and poll again, not to stop answering until I get home.
+    """
+
+    class Broken(FakeChannel):
+        def issues(self) -> list[channel.Issue]:
+            raise RuntimeError("github said 502")
+
+    attend.a_pass(Broken([]), conn=None)
+    assert "github said 502" in capsys.readouterr().err
+
+
+def test_noticing_a_prompt_is_logged(turns: list[dict], found, capsys) -> None:
+    c = FakeChannel([issue()], {4: [prompt(11, "try it with -x")]})
+    attend.once(c, conn=None)
+    err = capsys.readouterr().err
+    assert "#4" in err
+    assert "try it with -x" in err
+
+
+def test_how_long_a_turn_took_is_logged(turns: list[dict], found, capsys) -> None:
+    """The question while waiting in a park is always `is it still going`."""
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert "answered in" in capsys.readouterr().err
+
+
+def test_taking_a_session_over_is_logged(
+    turns: list[dict], found, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "live", lambda: {"7e90": Running(pid=42, status="idle")}
+    )
+    monkeypatch.setattr(attend, "take_over", lambda pid: None)
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert "42" in capsys.readouterr().err
+
+
+# --- saying something while a turn is running --------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _brisk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The watcher's poll is a real second in production and none in a test."""
+    monkeypatch.setattr(attend, "POLL", 0.0)
+
+
+def test_what_the_turn_does_is_said_as_it_does_it(capsys) -> None:
+    """`--output-format json` says nothing until it exits, and a turn is minutes.
+
+    The turn appends to the transcript as it goes, so the progress is already
+    on disk; watching the file is how it reaches the terminal.
+    """
+    read = Ran(tool="Read", input={"file_path": "/x/a.py"})
+    tests = Ran(tool="Bash", input={"command": "pytest"})
+    arriving: list[list[Block]] = [[], [read], [read, tests]]
+    attend.watch(lambda: arriving.pop(0) if len(arriving) > 1 else arriving[0], alive=_alive(3))
+    err = capsys.readouterr().err
+    assert "Read" in err
+    assert "pytest" in err
+
+
+def test_a_block_is_not_reported_twice(capsys) -> None:
+    same: list[Block] = [Ran(tool="Read", input={"file_path": "/x/a.py"})]
+    attend.watch(lambda: same, alive=_alive(4))
+    assert capsys.readouterr().err.count("Read") == 1
+
+
+def test_a_turn_that_says_nothing_still_says_it_is_alive(capsys, monkeypatch) -> None:
+    """Thinking for two minutes and a wedged process look identical otherwise."""
+    monkeypatch.setattr(attend, "HEARTBEAT", 0.0)
+    nothing: list[Block] = []
+    attend.watch(lambda: nothing, alive=_alive(2))
+    assert "still going" in capsys.readouterr().err
+
+
+def _alive(times: int):
+    """A process that is running for `times` checks and then is not."""
+    checks = iter([True] * times + [False] * 100)
+    return lambda: next(checks)
+
+
+def test_it_says_where_the_turn_is_running(turns: list[dict], found, capsys) -> None:
+    """Which worktree it landed in is the first thing I check when output surprises me."""
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert SESSION["cwd"] in capsys.readouterr().err
+
+
+def test_it_says_that_it_posted_and_how_much(turns: list[dict], found, capsys) -> None:
+    """A posted comment that never appears is a different bug from one never written."""
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert "posted" in capsys.readouterr().err
+
+
+def test_it_says_how_many_prompts_are_waiting(turns: list[dict], found, capsys) -> None:
+    c = FakeChannel([issue()], {4: [prompt(11, "first", 300), prompt(12, "second", 120)]})
+    attend.once(c, conn=None)
+    assert "2 waiting" in capsys.readouterr().err
+
+
+# --- a turn cut off part way is not finished ---------------------------------
+
+
+def test_a_prompt_whose_turn_never_finished_is_picked_up_again(turns: list[dict], found) -> None:
+    """Killing the loop mid-turn dropped the prompt for good.
+
+    The eyes go on before the turn runs, so they say `started`, not `answered`.
+    With them as the record, a turn interrupted by a restart was never retried
+    and never replied to — the work was in the transcript and nowhere else.
+    """
+    interrupted = prompt(11, "the one that was cut off")
+    c = FakeChannel([issue()], {4: [interrupted]})
+    attend.once(c, conn=None)
+    assert turns[0]["prompt"] == "the one that was cut off"
+
+
+def test_a_prompt_that_was_answered_is_left_alone(turns: list[dict], found, monkeypatch) -> None:
+    """Settled by the session having taken it in, not by a reply sitting near it."""
+    transcript(monkeypatch, said_by_me("already done", "u1"), Said("assistant", "Done."))
+    c = FakeChannel([issue()], {4: [prompt(11, "already done")]})
+    attend.once(c, conn=None)
+    assert turns == []
+
+
+# --- progress where I am actually looking ------------------------------------
+
+
+def test_a_comment_appears_before_the_turn_starts(turns: list[dict], found) -> None:
+    """Posted from the park, the thread should show something before the answer."""
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert c.posted[0][1].startswith(channel.RUNNING)
+
+
+def test_the_answer_replaces_that_comment_rather_than_adding_one(turns: list[dict], found) -> None:
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    left = [x for x in c.comments_[4] if x.is_ours]
+    assert len(left) == 1, "the answer, and the progress note thrown away"
+    assert "Done." in left[0].body
+    assert channel.RUNNING not in left[0].body
+
+
+def test_a_stale_progress_comment_does_not_count_as_an_answer(turns: list[dict], found) -> None:
+    """What a killed turn leaves: the prompt is still unanswered and gets retried."""
+    stale = channel.Comment(id=13, body=f"{channel.RUNNING}\nWorking…", author="a[bot]")
+    c = FakeChannel([issue()], {4: [prompt(11, "cut off"), stale]})
+    attend.once(c, conn=None)
+    assert turns[0]["prompt"] == "cut off"
+
+
+# --- the body is what the transcript says, not what the thread does ----------
+
+
+def test_the_body_lists_the_turns_in_the_transcript(
+    turns: list[dict], found, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A prompt that never ran is on GitHub and not in the session.
+
+    Listing comments made the body assert turns the agent has no knowledge of.
+    The transcript is what it will resume from, so that is what the body shows.
+    """
+    monkeypatch.setattr(
+        index.SOURCES["claude"],
+        "blocks",
+        lambda path, since="", tip=False, whole=False: [
+            Said(role="user", text="what actually ran"),
+            Said(role="assistant", text="an answer"),
+        ],
+    )
+    c = FakeChannel([issue()], {4: [prompt(11, "never ran")]})
+    attend.once(c, conn=None)
+    assert "what actually ran" in c.bodies[4]
+    assert "an answer" not in c.bodies[4]
+
+
+# --- rewinding by tapping once ------------------------------------------------
+
+
+def rewound(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    forks: list[str] = []
+
+    def fork(path, at_uuid: str) -> str:
+        forks.append(at_uuid)
+        return "newnative"
+
+    monkeypatch.setattr(index.SOURCES["claude"], "fork_at", fork)
+    monkeypatch.setattr(attend, "reindex", lambda conn: None)
+    return forks
+
+
+def answered(at_uuid: str = "9f3c1d20", id: int = 12) -> channel.Comment:
+    return channel.Comment(
+        id=id, body=f"{channel.MARKER}\n{comment.at(at_uuid)}\nDone.", author="a[bot]"
+    )
+
+
+def test_a_thumbs_down_on_an_answer_forks_at_the_point_it_recorded(
+    turns: list[dict], found, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    forks = rewound(monkeypatch)
+    down = channel.Comment(id=12, body=answered().body, author="a[bot]", rewind_wanted=True)
+    c = FakeChannel([issue()], {4: [prompt(11, "the prompt"), down]})
+    attend.once(c, conn=None)
+    assert forks == ["9f3c1d20"]
+
+
+def test_a_thumbs_down_on_my_prompt_means_the_same_point(
+    turns: list[dict], found, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Undo this exchange, whichever half of it I happened to tap."""
+    forks = rewound(monkeypatch)
+    down = prompt(11, "forget I asked")
+    down = channel.Comment(id=11, body=down.body, author="dandavison", rewind_wanted=True)
+    c = FakeChannel([issue()], {4: [down, answered()]})
+    attend.once(c, conn=None)
+    assert forks == ["9f3c1d20"]
+
+
+def test_the_rewound_exchange_is_deleted(
+    turns: list[dict], found, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The transcript keeps it; the thread is only the live conversation."""
+    rewound(monkeypatch)
+    down = channel.Comment(id=12, body=answered().body, author="a[bot]", rewind_wanted=True)
+    later = prompt(13, "and this came after")
+    c = FakeChannel([issue()], {4: [prompt(11, "the prompt"), down, later]})
+    attend.once(c, conn=None)
+    assert set(c.deleted) == {11, 12, 13}
+
+
+def test_the_issue_then_names_the_forked_session(
+    turns: list[dict], found, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rewound(monkeypatch)
+    down = channel.Comment(id=12, body=answered().body, author="a[bot]", rewind_wanted=True)
+    c = FakeChannel([issue()], {4: [prompt(11, "the prompt"), down]})
+    attend.once(c, conn=None)
+    assert "claude:newnative" in c.bodies[4]
+
+
+def test_a_rewind_does_not_also_run_the_prompt_it_undid(
+    turns: list[dict], found, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It was just deleted. Answering it would be answering a question I withdrew."""
+    rewound(monkeypatch)
+    down = channel.Comment(id=11, body="forget I asked", author="dandavison", rewind_wanted=True)
+    c = FakeChannel([issue()], {4: [down, answered()]})
+    attend.once(c, conn=None)
+    assert turns == []
+
+
+def test_prompts_that_piled_up_are_all_still_waiting(turns: list[dict], found) -> None:
+    """Three in a row while the loop was down, and the session has none of them.
+
+    This used to be decided by counting replies in the thread, which needed the
+    replies to arrive in step with the prompts and broke when they did not. The
+    session knows what it has taken in.
+    """
+    piled = [prompt(11, "first"), prompt(12, "second"), prompt(13, "third")]
+    assert [c.body for c in attend.pending(piled, [])] == ["first", "second", "third"]
+
+
+def test_one_the_session_has_taken_in_is_no_longer_waiting(turns: list[dict], found) -> None:
+    piled = [prompt(11, "first"), prompt(12, "second")]
+    taken: list[Block] = [Said(role="user", text="first", uuid="u1")]
+    assert [c.body for c in attend.pending(piled, taken)] == ["second"]
+
+
+def test_a_stale_progress_comment_settles_nothing(turns: list[dict], found) -> None:
+    """What a killed turn leaves. It is not a rendering, and it claims no prompt."""
+    running = channel.Comment(id=99, body=f"{channel.RUNNING}\nworking…", author="a[bot]")
+    assert [c.body for c in attend.pending([prompt(11, "first"), running], [])] == ["first"]
+
+
+# --- what survives a crash ----------------------------------------------------
+
+
+def test_the_hold_names_the_agent_once_it_has_been_spawned(monkeypatch, tmp_path) -> None:
+    """The server's pid is not what has the transcript open; the agent's is."""
+    named: list[tuple[str, int]] = []
+    monkeypatch.setattr(attend.attending, "writer", lambda n, p: named.append((n, p)))
+    monkeypatch.setattr(attend, "watch", lambda *a, **k: None)
+
+    class Fake:
+        pid = 4242
+        returncode = 0
+
+        def communicate(self, text, timeout=None):
+            return "{}", ""
+
+        def terminate(self) -> None:
+            pass
+
+    monkeypatch.setattr(attend.subprocess, "Popen", lambda *a, **k: Fake())
+    monkeypatch.setattr(index.SOURCES["claude"], "leaf", lambda path: "")
+    monkeypatch.setattr(index.SOURCES["claude"], "spent", lambda path: 0.0)
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "blocks", lambda path, since="", tip=False, whole=False: []
+    )
+    attend.run_turn(SESSION, "hello")
+    assert named == [("7e90", 4242)]
+
+
+def test_a_turn_costs_what_it_added_to_the_sessions_running_total(monkeypatch, tmp_path) -> None:
+    """A resumed turn reports the session's running total, which for a long session
+    is many times what the turn cost, and trips the spending limits at once."""
+    path = tmp_path / "7e90.jsonl"
+    path.write_text('{"type": "cost-state", "totalCostUSD": 57.36}\n')
+    monkeypatch.setattr(attend.attending, "writer", lambda n, p: None)
+    monkeypatch.setattr(attend, "watch", lambda *a, **k: None)
+
+    class Fake:
+        pid = 4242
+        returncode = 0
+
+        def communicate(self, text, timeout=None):
+            return '{"total_cost_usd": 57.95}', ""
+
+    monkeypatch.setattr(attend.subprocess, "Popen", lambda *a, **k: Fake())
+    monkeypatch.setattr(index.SOURCES["claude"], "leaf", lambda path: "")
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "blocks", lambda path, since="", tip=False, whole=False: []
+    )
+    _, summary, _ = attend.run_turn(SESSION | {"path": str(path)}, "hello")
+    assert summary["turn_cost_usd"] == pytest.approx(0.59)
+
+
+def test_an_interrupted_turn_is_said_to_be_interrupted(
+    turns: list[dict], found, monkeypatch, capsys
+) -> None:
+    """A half-answer passed off as an answer is the worst thing this can do."""
+    monkeypatch.setattr(attend.attending, "interrupted", lambda native: True)
+    c = FakeChannel([issue()], {4: [prompt()]})
+    attend.once(c, conn=None)
+    assert "cut off" in capsys.readouterr().err.lower()
+
+
+def test_a_row_whose_transcript_is_gone_is_not_a_session(monkeypatch) -> None:
+    """The index is behind. Everything downstream reads the file, so a row is not enough."""
+    monkeypatch.setattr(attend.query, "get", lambda conn, id: SESSION)
+    assert attend.lookup(None, "claude:7e90") is None
+
+
+def test_a_session_whose_transcript_is_there_is_found(monkeypatch, tmp_path) -> None:
+    here = SESSION | {"path": str(tmp_path / "7e90.jsonl")}
+    (tmp_path / "7e90.jsonl").write_text("")
+    monkeypatch.setattr(attend.query, "get", lambda conn, id: here)
+    assert attend.lookup(None, "claude:7e90") == here
+
+
+def test_one_bad_issue_does_not_abandon_the_rest_of_the_pass(
+    turns: list[dict], monkeypatch, capsys
+) -> None:
+    """A pass that dies on the first issue never reaches the ones behind it."""
+
+    def lookup(conn, id: str) -> dict | None:
+        if id == "claude:gone":
+            raise FileNotFoundError("/gone/7e90.jsonl")
+        return SESSION
+
+    monkeypatch.setattr(attend, "lookup", lookup)
+    c = FakeChannel(
+        [issue(session_id="claude:gone"), channel.Issue(5, "t", "| session | claude:7e90 |", "")],
+        {4: [prompt()], 5: [prompt(id=12)]},
+    )
+    assert attend.once(c, conn=None) == 1
+    assert "FileNotFoundError" in capsys.readouterr().err
+
+
+def test_a_pass_does_not_swallow_a_credential_failure(monkeypatch, capsys) -> None:
+    """Everything else is worth retrying. This is worth stopping for."""
+
+    class Denied(FakeChannel):
+        def issues(self):
+            raise channel.NotAuthorized("the token is not valid")
+
+    with pytest.raises(channel.NotAuthorized):
+        attend.a_pass(Denied([]), conn=None)
+
+
+# --- the thread reconciled against the session --------------------------------
+
+
+def transcript(monkeypatch, *blocks) -> None:
+    monkeypatch.setattr(
+        index.SOURCES["claude"],
+        "blocks",
+        lambda path, since="", tip=False, whole=False: list(blocks),
+    )
+
+
+def said_by_me(text: str, uuid: str) -> Said:
+    return Said(role="user", text=text, uuid=uuid)
+
+
+def test_a_turn_i_had_at_the_keyboard_appears_in_the_thread(found, monkeypatch) -> None:
+    """The guarantee the thread could not make: mixed use is now the normal case.
+
+    Nothing was posted for work done in the TUI, so the thread read as though
+    the conversation were only what came through it.
+    """
+    transcript(
+        monkeypatch, said_by_me("asked at the keyboard", "u1"), Said("assistant", "answered")
+    )
+    c = FakeChannel([issue()], {4: []})
+    attend.reconcile(c, issue(), SESSION)
+    assert comment.turn_key(c.posted[0][1]) == "u1"
+    assert "answered" in c.posted[0][1]
+
+
+def test_a_turn_whose_rendering_has_changed_is_rewritten_not_duplicated(found, monkeypatch) -> None:
+    transcript(monkeypatch, said_by_me("q", "u1"), Said("assistant", "the fuller answer"))
+    already = channel.Comment(
+        id=50, body=comment.render_turn(comment.Turn("u1", "q", [])), author="a[bot]"
+    )
+    c = FakeChannel([issue()], {4: [already]})
+    attend.reconcile(c, issue(), SESSION)
+    assert c.posted == []
+    assert c.edited[0][0] == 50
+    assert "the fuller answer" in c.edited[0][1]
+
+
+def test_a_rendering_of_a_turn_that_is_gone_is_deleted(found, monkeypatch) -> None:
+    """After a rewind the session is shorter, and the thread should be too."""
+    transcript(monkeypatch)
+    stale = channel.Comment(
+        id=50, body=comment.render_turn(comment.Turn("u1", "q", [])), author="a[bot]"
+    )
+    c = FakeChannel([issue()], {4: [stale]})
+    attend.reconcile(c, issue(), SESSION)
+    assert c.deleted == [50]
+
+
+def test_my_own_comments_are_never_touched(found, monkeypatch) -> None:
+    """They are the input. Nothing here is entitled to rewrite what I asked."""
+    transcript(monkeypatch)
+    c = FakeChannel([issue()], {4: [prompt(11, "mine")]})
+    attend.reconcile(c, issue(), SESSION)
+    assert c.deleted == []
+    assert c.edited == []
+
+
+def test_a_progress_comment_is_cleared_once_nothing_is_running(found, monkeypatch) -> None:
+    """Reconciling happens between turns, so any left over is litter from a crash."""
+    transcript(monkeypatch)
+    litter = channel.Comment(id=60, body=f"{channel.RUNNING}\nworking…", author="a[bot]")
+    c = FakeChannel([issue()], {4: [litter]})
+    attend.reconcile(c, issue(), SESSION)
+    assert c.deleted == [60]
+
+
+def test_a_prompt_already_in_the_session_is_not_run_again(found, monkeypatch) -> None:
+    """Consumption records itself: the turn writes my prompt into the transcript.
+
+    That is what makes at-most-once hold without bookkeeping. Counting replies
+    in the thread was the bookkeeping, and it desynced every time the thread
+    was edited.
+    """
+    ran: list[str] = []
+    monkeypatch.setattr(
+        attend, "run_turn", lambda s, t, showing=None, tag="": (ran.append(t), ([], {}, ""))[1]
+    )
+    transcript(monkeypatch, said_by_me("already asked", "u1"), Said("assistant", "done"))
+    c = FakeChannel([issue()], {4: [prompt(11, "already asked")]})
+    attend.once(c, conn=None)
+    assert ran == []
+
+
+def test_a_prompt_not_yet_in_the_session_is_run(turns: list[dict], found, monkeypatch) -> None:
+    transcript(monkeypatch, said_by_me("something else", "u1"))
+    c = FakeChannel([issue()], {4: [prompt(11, "brand new")]})
+    attend.once(c, conn=None)
+    assert turns[0]["prompt"] == "brand new"
+
+
+def test_a_prompt_a_rendering_says_it_answered_is_not_run_again(
+    turns: list[dict], found, monkeypatch
+) -> None:
+    """The second guard, for when the text does not match exactly.
+
+    Running the same prompt twice is the only thing here that cannot be undone,
+    so it is worth two independent reasons not to.
+    """
+    transcript(monkeypatch)
+    claimed = channel.Comment(
+        id=50,
+        body=comment.render_turn(comment.Turn("u1", "q", []), marks={comment.BY: "11"}),
+        author="a[bot]",
+    )
+    c = FakeChannel([issue()], {4: [prompt(11, "asked"), claimed]})
+    attend.once(c, conn=None)
+    assert turns == []
+
+
+def test_a_prompt_is_marked_done_when_its_answer_lands(turns: list[dict], found) -> None:
+    """Eyes on means working; a rocket means the answer is there."""
+    c = FakeChannel([issue()], {4: [prompt(11)]})
+    attend.once(c, conn=None)
+    assert c.taken == [11]
+    assert c.done == [11]
+
+
+def test_the_same_prompt_sent_twice_runs_once(turns: list[dict], found, monkeypatch) -> None:
+    """A double send from a phone, and both of them ran.
+
+    Pending was worked out once, before any turn, so the second copy was still
+    on the list after the first had put that very text into the session. The
+    rule was right; it was being asked at the wrong moment.
+    """
+    consumed: list[Block] = []
+
+    def fake(session, text, showing=None, tag=""):
+        consumed.append(Said(role="user", text=text, uuid=f"u{len(consumed)}"))
+        return [Said(role="assistant", text="Done.")], {}, "before"
+
+    monkeypatch.setattr(attend, "run_turn", fake)
+    monkeypatch.setattr(
+        index.SOURCES["claude"],
+        "blocks",
+        lambda path, since="", tip=False, whole=False: list(consumed),
+    )
+    same = "Can we view this as a matrix"
+    c = FakeChannel([issue()], {4: [prompt(11, same), prompt(12, same)]})
+    attend.once(c, conn=None)
+    assert [b.text for b in consumed if isinstance(b, Said)] == [same]
+
+
+def test_two_different_prompts_in_one_pass_both_run(turns: list[dict], found, monkeypatch) -> None:
+    """Re-checking must not turn a queue of real prompts into a queue of one."""
+    consumed: list[Block] = []
+
+    def fake(session, text, showing=None, tag=""):
+        consumed.append(Said(role="user", text=text, uuid=f"u{len(consumed)}"))
+        return [Said(role="assistant", text="Done.")], {}, "before"
+
+    monkeypatch.setattr(attend, "run_turn", fake)
+    monkeypatch.setattr(
+        index.SOURCES["claude"],
+        "blocks",
+        lambda path, since="", tip=False, whole=False: list(consumed),
+    )
+    c = FakeChannel([issue()], {4: [prompt(11, "first", 300), prompt(12, "second", 120)]})
+    attend.once(c, conn=None)
+    assert [b.text for b in consumed if isinstance(b, Said)] == ["first", "second"]
+
+
+# --- a thread is a window, not a whole session --------------------------------
+
+
+def test_an_issue_opened_for_a_session_starts_from_where_it_is(
+    turns: list[dict], monkeypatch
+) -> None:
+    """Seventy-three turns of history posted as seventy-three comments, once.
+
+    An issue is a way in, not an archive. Opening one records where the session
+    had got to, so the thread carries the conversation from then on.
+    """
+    monkeypatch.setattr(index.SOURCES["claude"], "leaf", lambda path: "leaf-now")
+    c = FakeChannel([])
+    made = attend.issue_for(c, SESSION)
+    assert comment.frontmatter(made.body)["from"] == "leaf-now"
+
+
+def test_an_issue_that_names_no_start_shows_only_the_recent_past(
+    turns: list[dict], found, monkeypatch
+) -> None:
+    """The old issues have no start, and rendering all of one is unreadable."""
+    many = []
+    for i in range(attend.MOST + 10):
+        many += [Said(role="user", text=f"q{i}", uuid=f"u{i}"), Said("assistant", f"a{i}")]
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "blocks", lambda path, since="", tip=False, whole=False: many
+    )
+    c = FakeChannel([issue()], {4: []})
+    attend.reconcile(c, issue(), SESSION)
+    assert len(c.posted) == attend.MOST
+
+
+def test_a_prompt_consumed_before_the_window_is_not_run_again(
+    turns: list[dict], found, monkeypatch
+) -> None:
+    """Two different questions, and they were being asked of the same range.
+
+    The window says what the thread shows. Whether a prompt has been consumed
+    is a fact about the whole session. Conflated, moving a window forward
+    re-armed every prompt behind it.
+    """
+    every = [Said(role="user", text="asked long ago", uuid="u1"), Said("assistant", "answered")]
+
+    def blocks(path, since="", tip=False, whole=False):
+        return [] if since else every
+
+    monkeypatch.setattr(index.SOURCES["claude"], "blocks", blocks)
+    windowed = channel.Issue(
+        number=4, title="t", body="| session | claude:7e90 |\n| from | later |", url=""
+    )
+    c = FakeChannel([windowed], {4: [prompt(11, "asked long ago")]})
+    attend.once(c, conn=None)
+    assert turns == []
+
+
+# --- what one pass is allowed to touch ----------------------------------------
+
+
+def test_a_pass_can_be_confined_to_one_issue(turns: list[dict], found) -> None:
+    """A run that acts on every open issue cannot be tested against the real repo.
+
+    Driving the loop against a scratch issue reached into the two I actually
+    use and posted on both, because a pass is over everything that is open.
+    """
+    mine = channel.Issue(number=4, title="t", body="| session | claude:7e90 |", url="")
+    other = channel.Issue(number=9, title="t", body="| session | claude:7e90 |", url="")
+    c = FakeChannel([mine, other], {4: [prompt(11, "for four")], 9: [prompt(12, "for nine")]})
+    attend.once(c, conn=None, only=4)
+    assert [t["prompt"] for t in turns] == ["for four"]
+
+
+def test_a_session_that_has_gone_is_said_once_not_once_per_prompt(turns: list[dict], found) -> None:
+    """Thirty prompts on an issue whose session was missing became thirty comments.
+
+    One fact about the issue, so it is said once. Saying it per prompt turns a
+    stale index into a thread full of the same sentence.
+    """
+    c = FakeChannel(
+        [issue(session_id="claude:gone")],
+        {4: [prompt(11, "a"), prompt(12, "b"), prompt(13, "c")]},
+    )
+    attend.once(c, conn=None)
+    assert len(c.posted) == 1
+    assert "claude:gone" in c.posted[0][1]
+
+
+def test_naming_an_issue_asks_for_it_rather_than_searching(turns: list[dict], found) -> None:
+    """The list lags behind creation, so a named issue is fetched by name."""
+    asked: list[int] = []
+
+    class Direct(FakeChannel):
+        def issues(self):
+            raise AssertionError("a named issue must not need the list")
+
+        def issue(self, number: int) -> channel.Issue:
+            asked.append(number)
+            return issue()
+
+    c = Direct([], {4: [prompt(11, "for four")]})
+    attend.once(c, conn=None, only=4)
+    assert asked == [4]
+    assert [t["prompt"] for t in turns] == ["for four"]
+
+
+def test_a_turn_leaves_one_comment_not_two(turns: list[dict], found, monkeypatch) -> None:
+    """The answer and the rendering of the same turn were separate comments.
+
+    The answer went into the progress comment carrying no turn key, so
+    reconciling did not recognise it and posted a rendering of its own. The
+    answer has to be the rendering.
+    """
+    consumed: list[Block] = []
+
+    def fake(session, text, showing=None, tag=""):
+        consumed.extend([Said(role="user", text=text, uuid="u7"), Said("assistant", "four")])
+        return list(consumed), {}, "before"
+
+    monkeypatch.setattr(attend, "run_turn", fake)
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "blocks", lambda p, since="", tip=False, whole=False: consumed
+    )
+    c = FakeChannel([issue()], {4: [prompt(11, "two and two?")]})
+    attend.once(c, conn=None)
+    left = [x for x in c.comments_[4] if x.is_ours]
+    assert len(left) == 1, "one turn, one comment"
+    assert comment.turn_key(left[0].body) == "u7"
+    assert comment.asked_by(left[0].body) == 11
+
+
+def test_reconciling_keeps_what_only_the_thread_knew(turns: list[dict], found, monkeypatch) -> None:
+    """Which comment asked, and where to rewind to, are not in the transcript."""
+    turn = comment.Turn("u7", "two and two?", [Said("assistant", "four")])
+    already = channel.Comment(
+        id=50,
+        body=comment.render_turn(turn, marks={comment.BY: "11", comment.AT: "leaf"}),
+        author="a[bot]",
+    )
+    monkeypatch.setattr(
+        index.SOURCES["claude"],
+        "blocks",
+        lambda p, since="", tip=False, whole=False: [
+            Said(role="user", text="two and two?", uuid="u7"),
+            Said("assistant", "four and a bit"),
+        ],
+    )
+    c = FakeChannel([issue()], {4: [already]})
+    attend.reconcile(c, issue(), SESSION)
+    assert comment.asked_by(c.edited[-1][1]) == 11
+    assert comment.point(c.edited[-1][1]) == "leaf"
+    assert "four and a bit" in c.edited[-1][1]
+
+
+def test_restating_the_body_keeps_the_window(turns: list[dict], found, monkeypatch) -> None:
+    """The body is rewritten every pass from the session, which has no window.
+
+    So the window survived exactly until the first pass, and the thread then
+    rendered the whole session again. The same mistake as dropping the marks:
+    re-rendering must not lose what only the thread knew.
+    """
+    windowed = channel.Issue(
+        number=4, title="t", body="| session | claude:7e90 |\n| from | a-point |", url=""
+    )
+    c = FakeChannel([windowed], {4: [prompt(11, "a question")]})
+    attend.once(c, conn=None)
+    assert comment.frontmatter(c.bodies[4])["from"] == "a-point"
+
+
+def test_the_answer_arrives_as_a_new_comment(turns: list[dict], found, monkeypatch) -> None:
+    """Edited into the progress note, the answer never reaches the phone.
+
+    GitHub notifies on a comment being posted, not on one being edited. So the
+    notification said "working…" and the answer landed in silence, which from a
+    phone is indistinguishable from the turn never having finished.
+    """
+    consumed: list[Block] = []
+
+    def fake(session, text, showing=None, tag=""):
+        consumed.extend([Said(role="user", text=text, uuid="u7"), Said("assistant", "four")])
+        return list(consumed), {}, "before"
+
+    monkeypatch.setattr(attend, "run_turn", fake)
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "blocks", lambda p, since="", tip=False, whole=False: consumed
+    )
+    c = FakeChannel([issue()], {4: [prompt(11, "q")]})
+    attend.once(c, conn=None)
+    assert any("four" in body for _, body in c.posted), "the answer was posted"
+    assert not any("four" in body for _, body in c.edited), "not edited into the note"
+
+
+def test_a_quiet_channel_is_polled_less_and_a_busy_one_at_once(
+    turns: list[dict], found, monkeypatch, tmp_path
+) -> None:
+    """A request a second for hours against someone else's repo is not polite.
+
+    The 304s are free, so this is not about budget. It costs latency only on
+    the first prompt after a lull, which is the trade worth making: while a
+    conversation is going the channel answers as fast as it ever did.
+    """
+    monkeypatch.setattr(attend.attending, "LOCK", tmp_path / "attending.pid")
+    slept: list[float] = []
+    monkeypatch.setattr(attend.time, "sleep", lambda s: slept.append(s) or _stop(len(slept)))
+    monkeypatch.setattr(attend, "QUIETEST", 8.0)
+    c = FakeChannel([issue()], {4: []})
+    with pytest.raises(_Enough):
+        attend.loop(c, conn=None, interval=1.0)
+    assert slept == [2.0, 4.0, 8.0, 8.0], f"doubling out to the ceiling, got {slept}"
+
+    slept.clear()
+    monkeypatch.setattr(attend.time, "sleep", lambda s: slept.append(s) or _stop(len(slept), 1))
+    c = FakeChannel([issue()], {4: [prompt()]})
+    with pytest.raises(_Enough):
+        attend.loop(c, conn=None, interval=1.0)
+    assert slept == [1.0], "a prompt answered means poll again at once"
+
+
+class _Enough(Exception):
+    """The loop does not end on its own; this is how a test gets out of it."""
+
+
+def _stop(n: int, after: int = 4) -> None:
+    if n >= after:
+        raise _Enough
+
+
+def test_the_breaker_is_not_swallowed_by_the_loop_carrying_on(
+    turns: list[dict], found, monkeypatch
+) -> None:
+    """The pass survives anything so the afternoon is not lost to one blip.
+
+    That is right for a blip at GitHub and exactly wrong for a bound being
+    crossed: a breaker a broad `except` catches is not a breaker at all, and
+    this is the one thing in here that must stop everything.
+    """
+    monkeypatch.setattr(attend.limits, "check_not_resubmitting", _refuse)
+    c = FakeChannel([issue()], {4: [prompt()]})
+    with pytest.raises(limits.Tripped):
+        attend.a_pass(c, conn=None)
+    assert any("Stopped." in body for _, body in c.posted), "and it says so where I will see it"
+
+
+def _refuse(prompt_id: int) -> None:
+    raise limits.Tripped("a bound was crossed")
