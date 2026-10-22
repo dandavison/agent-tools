@@ -186,7 +186,8 @@ b -> sources.issues: 13. write back what it learned
 ## Tools
 
 `agent --help` documents every subcommand. Most subcommands run a script in `bin/`, which can
-also be run directly as `agent-<subcommand>`.
+also be run directly as `agent-<subcommand>`. `agent-sessions`, which finds, indexes and
+resumes past sessions, is in [`sessions/`](sessions/README.md).
 
 | | |
 |-|-|
