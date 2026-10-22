@@ -162,6 +162,28 @@ def test_m_completes_model_names(home: Path, words: str) -> None:
     assert result.stdout.splitlines() == ["plain,opus", "plain,luna"]
 
 
+@pytest.mark.parametrize(
+    ("words", "expected"),
+    [
+        ("agent sessions se", {"search", "serve"}),
+        ("agent sessions search --s", {"--since"}),
+    ],
+)
+def test_sessions_completes_its_commands_and_options(
+    home: Path, words: str, expected: set[str]
+) -> None:
+    result = run(
+        home,
+        env={
+            "_AGENT_COMPLETE": "bash_complete",
+            "COMP_WORDS": words,
+            "COMP_CWORD": str(len(words.split()) - 1),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert expected <= {line.split(",")[-1] for line in result.stdout.splitlines()}
+
+
 def test_sessions_runs_agent_sessions_with_its_help(home: Path) -> None:
     result = run(home, "sessions", "--help")
     assert result.returncode == 0, result.stderr
