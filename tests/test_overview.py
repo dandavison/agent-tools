@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from agent_tools.overview import headings, source_url
+
 AGENT = Path(sys.executable).parent / "agent"
 
 RECIPE = """
@@ -85,7 +87,11 @@ def test_each_source_has_tokens_headings_and_a_summary(home: Path) -> None:
     assert overview(home).returncode == 0
     notes, plan = page_data(home)["sources"]
     assert plan["tokens"] > notes["tokens"] > 0
-    assert notes["headings"] == ["# notes.md", "## Goals", "### Risks"]
+    assert [h["text"] for h in notes["headings"]] == [
+        "# notes.md",
+        "## Goals",
+        "### Risks",
+    ]
     assert notes["summary"].startswith("summary of")
 
 
@@ -106,3 +112,49 @@ def test_page_escapes_script_end_tags(home: Path) -> None:
     assert overview(home).returncode == 0
     page = Path((home / "bin" / "open.argv").read_text().strip()).read_text()
     assert page.count("</script>") == 1
+
+
+SLACK = "https://temporaltechnologies.slack.com/archives/C07ABC/p1728000000000000"
+LOG = "https://github.com/temporalio/dandavison-log/issues"
+
+
+@pytest.mark.parametrize(
+    "uri, url",
+    [
+        ("issue:395", f"{LOG}/395"),
+        ("issue:416#issuecomment-62", f"{LOG}/416#issuecomment-62"),
+        ("issue:416 exclude=issuecomment-62", f"{LOG}/416"),
+        ("https://github.com/o/r/issues/5", "https://github.com/o/r/issues/5"),
+        (f"slack:{SLACK}", SLACK),
+        (SLACK, SLACK),
+        ("path:notes.md", "http://wormhole:7117/file/BASE/notes.md:1?land-in=editor"),
+        ("path:*.md", None),
+        ("session:claude:7e90 --whole", None),
+        ("meeting:design review", None),
+    ],
+)
+def test_sources_link_to_where_they_live(uri: str, url: str | None) -> None:
+    base = Path("/base")
+    expected = url.replace("BASE", "base") if url else None
+    assert source_url(uri, base) == expected
+
+
+def test_issue_comment_headings_link_to_their_comments() -> None:
+    text = "# Title\n### @dandavison on 2026-10-02T09:00:00Z (issuecomment-62)\nhi\n"
+    assert headings(text, f"{LOG}/416") == [
+        {"text": "# Title", "url": None},
+        {
+            "text": "### @dandavison on 2026-10-02T09:00:00Z (issuecomment-62)",
+            "url": f"{LOG}/416#issuecomment-62",
+        },
+    ]
+
+
+def test_page_links_the_recipe_and_each_source(home: Path) -> None:
+    assert overview(home).returncode == 0
+    data = page_data(home)
+    recipe = home / "recipe.toml"
+    assert data["recipe_url"] == f"http://wormhole:7117/file/{recipe}:1?land-in=editor"
+    assert data["sources"][0]["url"] == (
+        f"http://wormhole:7117/file/{home / 'notes.md'}:1?land-in=editor"
+    )
