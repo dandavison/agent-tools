@@ -65,12 +65,13 @@ agent ctx --purpose "implement batch cancel" --budget 80000 \
 ```
 
 Describe a session in plain language (its purpose, what it should know, what it must not
-see) and have an agent prepare a saved recipe for it, checking exclusions by provenance and
-stopping for approval. It prints the command that starts the session; it never starts it:
+see) and have an agent prepare a saved recipe for it, checking exclusions by provenance.
+`agent new` shows the report; Enter starts the session, and typed changes revise the recipe
+first. Later sessions start from the recipe:
 
 ```
-agent prepare-session "implement phase 1 of streams without seeing Moe's work"
-agent ctx ~/src/temporalio-etc/log/recipes/streams-implementer.toml | agent with-input
+agent new "implement phase 1 of streams without seeing Moe's work"
+agent new ~/src/temporalio-etc/log/recipes/streams-implementer.toml
 ```
 
 Serve a local model; while it runs, `qwen-local` is offered as a model:
@@ -174,6 +175,7 @@ also be run directly as `agent-<subcommand>`.
 | `agent pick` | Choose a model from `config/agent-models.toml`. |
 | `agent prices-refresh` | Cache OpenRouter's model list, used for codex costs. |
 | `agent ctx` | Build an agent's context from sources or a recipe within a token budget. No compression yet. |
+| `agent new` | Prepare a session from a description or recipe, and start it on Enter. |
 | `agent prepare-session` | The prompt script that prepares a recipe. |
 | `agent with-input` | Start an interactive agent with its input pre-filled from stdin. |
 | `agent from-issues` | Same, from GitHub issues. Reads `~/.config/agent-from-issues.toml`. |

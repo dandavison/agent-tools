@@ -35,9 +35,16 @@ SCRIPTS = {
 
     \b
     agent prepare-session "DESCRIPTION OF THE SESSION"
-    agent prepare-session RECIPE.draft.toml "REPLY TO THE DRAFT"
-    Each run stops at a draft for approval. The last prints the command that starts
+    agent prepare-session RECIPE.toml "CHANGES"
+    Each run commits the recipe in the log repo and prints the command that starts
     the session; it never starts it.""",
+    "new": """Prepare a session from a description, then start it on Enter.
+
+    \b
+    agent new [--personal] [-m MODEL] "DESCRIPTION OF THE SESSION"
+    agent new [--personal] [-m MODEL] RECIPE.toml
+    Runs prepare-session and shows its report. Enter starts the session with the
+    recipe's context; typed changes revise the recipe first. Requires tmux.""",
     "mlx-serve": """Serve a local MLX model over an OpenAI-compatible API.
 
     \b

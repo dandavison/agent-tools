@@ -1,0 +1,57 @@
+#!/bin/bash
+#
+# agent-new [--personal] [-m MODEL] "DESCRIPTION OF THE SESSION"
+# agent-new [--personal] [-m MODEL] RECIPE.toml
+#
+# Prepare a recipe for a session described in plain language (agent-prepare-session) and
+# show its report. Enter then starts the session with the recipe's context (agent-with-input);
+# typed changes go to agent-prepare-session, which commits a revised recipe.
+
+set -euo pipefail
+
+usage='Usage: agent-new [--personal] [-m MODEL] "DESCRIPTION" | RECIPE.toml'
+log=~/src/temporalio-etc/log
+with_input_args=()
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--personal" ]]; then
+        with_input_args+=(--personal)
+        shift
+    elif [[ "$1" == "-m" && $# -ge 2 ]]; then
+        with_input_args+=(-m "$2")
+        shift 2
+    else
+        break
+    fi
+done
+if [[ $# -ne 1 ]]; then
+    echo "$usage" >&2
+    exit 1
+fi
+
+# Runs agent-prepare-session and sets recipe to the recipe its run committed.
+prepare() {
+    local before changed
+    before="$(git -C "$log" rev-parse HEAD)"
+    agent-prepare-session "$@"
+    changed="$(git -C "$log" diff --name-only "$before" HEAD -- 'recipes/*.toml')"
+    if [[ -z "$changed" || "$changed" == *$'\n'* ]]; then
+        echo "agent-new: expected one committed recipe, found: ${changed:-no recipe}" >&2
+        exit 1
+    fi
+    recipe="$log/$changed"
+}
+
+if [[ "$1" == *.toml ]]; then
+    recipe="$1"
+else
+    prepare "$1"
+fi
+
+while read -r -p "Enter starts the session; or type changes: " reply; do
+    if [[ -z "$reply" ]]; then
+        agent ctx "$recipe" | agent-with-input ${with_input_args[@]+"${with_input_args[@]}"}
+        exit
+    fi
+    prepare "$recipe" "$reply"
+done
+exit 1

@@ -26,8 +26,8 @@ gather-context, map-sessions, prepare-session) and the rest is its topic or desc
 - `agent ctx` prints a context as Markdown. It only reads.
 - `agent prepare-session` prepares a context recipe (below).
 
-Never run `agent`, `agent start`, `agent with-input` or `agent from-issues`. They start
-interactive sessions, which the user starts. Give the user the command instead.
+Never run `agent`, `agent start`, `agent new`, `agent with-input` or `agent from-issues`.
+They start interactive sessions, which the user starts. Give the user the command instead.
 
 ## Building context
 
