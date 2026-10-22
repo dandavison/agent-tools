@@ -20,7 +20,10 @@ echo "$*" >> recipes/meeting.toml
 git add recipes/meeting.toml && git commit -qm recipe
 """
 
-FAKE_AGENT = 'printf "context of %s" "$2"\n'
+FAKE_AGENT = """\
+if [[ "$1" == quiz ]]; then printf '%s\\n' "$@" > "$HOME/quiz.argv"; exit; fi
+printf "context of %s" "$2"
+"""
 
 FAKE_WITH_INPUT = """\
 printf '%s\\n' "$@" > "$HOME/with-input.argv"
@@ -114,3 +117,10 @@ def test_eof_at_prompt_exits_without_starting(home: Path) -> None:
     result = run(home, recipe(home), input="")
     assert result.returncode != 0
     assert not (home / "with-input.stdin").exists()
+
+
+def test_q_quizzes_the_recipe_then_asks_again(home: Path) -> None:
+    result = run(home, "-m", "opus", recipe(home), input="q\n\n")
+    assert result.returncode == 0, result.stderr
+    assert (home / "quiz.argv").read_text() == f"quiz\n-m\nopus\n{recipe(home)}\n"
+    assert (home / "with-input.stdin").read_text() == f"context of {recipe(home)}"
