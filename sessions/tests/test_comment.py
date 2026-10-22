@@ -23,7 +23,7 @@ def ran(name: str, output: str = "", is_error: bool = False, **input: object) ->
     return Ran(tool=name, input=input, output=output, is_error=is_error)
 
 
-DONE = {"num_turns": 2, "total_cost_usd": 0.03}
+DONE = {"num_turns": 2, "total_cost_usd": 57.95, "turn_cost_usd": 0.03}
 
 
 # --- what is said comes first, and what was run folds away -------------------
@@ -34,6 +34,12 @@ def test_what_the_agent_said_is_at_the_top_level() -> None:
     out = comment.render([said("Replaced the retry loop.")], DONE)
     assert "Replaced the retry loop." in out
     assert "<details" not in out.split("Replaced the retry loop.")[0]
+
+
+def test_the_footer_gives_what_the_turn_cost_not_the_sessions_running_total() -> None:
+    out = comment.render([said("Done.")], DONE)
+    assert "$0.03" in out
+    assert "$57.95" not in out
 
 
 def test_the_answer_comes_before_the_work_that_produced_it() -> None:

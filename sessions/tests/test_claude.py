@@ -18,7 +18,7 @@ from conftest import (
     user,
 )
 
-from agent_sessions import index
+from agent_sessions import index, limits
 from agent_sessions.models import Delta, Running, Said
 from agent_sessions.sources.claude import ClaudeSource, blocks, parse, render_blocks
 from agent_sessions.sources.claude import _read as read
@@ -700,6 +700,33 @@ def test_a_turn_is_given_a_budget_it_cannot_exceed() -> None:
     command = ClaudeSource().turn_command("7e90")
     assert "--max-budget-usd" in command
     assert float(command[command.index("--max-budget-usd") + 1]) > 0
+
+
+def cost_state(total: float) -> dict[str, Any]:
+    return {"type": "cost-state", "sessionId": SESSION, "totalCostUSD": total}
+
+
+def test_spent_is_the_last_running_total_the_transcript_recorded(tmp_path: Path) -> None:
+    """A resumed turn reports the session's running total, not what the turn cost."""
+    path = write(tmp_path, [user("u1", None, "hi"), cost_state(1.5), cost_state(57.36)])
+    assert ClaudeSource().spent(path) == 57.36
+
+
+def test_a_session_that_recorded_no_cost_has_spent_nothing(tmp_path: Path) -> None:
+    path = write(tmp_path, [user("u1", None, "hi")])
+    assert ClaudeSource().spent(path) == 0.0
+
+
+def test_a_turn_budget_is_on_top_of_what_the_session_has_spent(tmp_path: Path) -> None:
+    """The agent checks --max-budget-usd against the resumed session's running total.
+
+    A budget of the per-turn limit alone stops every turn of a session that has
+    already cost more than that after its first model call.
+    """
+    write(tmp_path, [user("u1", None, "hi"), cost_state(57.36)])
+    command = ClaudeSource(root=tmp_path).turn_command(SESSION)
+    budget = float(command[command.index("--max-budget-usd") + 1])
+    assert budget == pytest.approx(57.36 + limits.PER_TURN_USD)
 
 
 def test_a_transcript_being_written_to_can_still_be_read(tmp_path: Path) -> None:

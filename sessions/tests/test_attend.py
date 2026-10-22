@@ -602,6 +602,30 @@ def test_the_hold_names_the_agent_once_it_has_been_spawned(monkeypatch, tmp_path
     assert named == [("7e90", 4242)]
 
 
+def test_a_turn_costs_what_it_added_to_the_sessions_running_total(monkeypatch, tmp_path) -> None:
+    """A resumed turn reports the session's running total, which for a long session
+    is many times what the turn cost, and trips the spending limits at once."""
+    path = tmp_path / "7e90.jsonl"
+    path.write_text('{"type": "cost-state", "totalCostUSD": 57.36}\n')
+    monkeypatch.setattr(attend.attending, "writer", lambda n, p: None)
+    monkeypatch.setattr(attend, "watch", lambda *a, **k: None)
+
+    class Fake:
+        pid = 4242
+        returncode = 0
+
+        def communicate(self, text, timeout=None):
+            return '{"total_cost_usd": 57.95}', ""
+
+    monkeypatch.setattr(attend.subprocess, "Popen", lambda *a, **k: Fake())
+    monkeypatch.setattr(index.SOURCES["claude"], "leaf", lambda path: "")
+    monkeypatch.setattr(
+        index.SOURCES["claude"], "blocks", lambda path, since="", tip=False, whole=False: []
+    )
+    _, summary, _ = attend.run_turn(SESSION | {"path": str(path)}, "hello")
+    assert summary["turn_cost_usd"] == pytest.approx(0.59)
+
+
 def test_an_interrupted_turn_is_said_to_be_interrupted(
     turns: list[dict], found, monkeypatch, capsys
 ) -> None:
