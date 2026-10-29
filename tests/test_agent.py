@@ -243,3 +243,13 @@ def test_sessions_keeps_agent_sessions_exit_codes(home: Path) -> None:
 def test_help_lists_sessions(home: Path) -> None:
     result = run(home, "--help")
     assert "\n  sessions\n" in result.stdout
+
+
+def test_print_prompt_prints_a_procedure_instead_of_running_it(home: Path) -> None:
+    result = run(
+        home, "exfiltrate", "--print-prompt", "batch cancel", fake_scripts=False
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("You exfiltrate a topic")
+    assert result.stdout.rstrip().endswith("Arguments: batch cancel")
+    assert not (home / "bin" / "claude.argv").exists()
