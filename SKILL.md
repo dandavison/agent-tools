@@ -132,11 +132,10 @@ I sync the issues to markdown files stored in the repo; my local clone is ~/src/
 Exfiltrate means to extract from agent conversations their knowledge/understanding/beliefs/wisdom
 etc regarding a certain topic and post it to issue(s) in my log repo.
 
-The procedure is a script; do not do its steps yourself. Run
-`agent exfiltrate "<my words: the topic, and any sessions or target issue I named>"`. It takes
-minutes; run it in the background if your harness allows. Show me its report. It never asks a
-session that is open in a terminal, because that would close my pane; it lists those with a
-prompt for me to paste into them.
+Run `agent exfiltrate --print-prompt "<my words: the topic, and any sessions or target issue I
+named>"` and follow the procedure it prints, ending with its report. If I ask for it in a
+subagent, give the subagent that command. It never asks a session that is open in a terminal,
+because that would close my pane; it lists those with a prompt for me to paste into them.
 
 With a target issue, everything goes to that issue, whatever the sessions posted to before.
 Without one, each session writes to the issues it has been posting to on the topic, or to a new
@@ -230,8 +229,9 @@ Commands:
   exfiltrate
     Get the sessions that discussed a topic to write what they know into log issues.
 
-    agent exfiltrate "TOPIC, and optionally sessions and a target issue"
+    agent exfiltrate [--print-prompt] "TOPIC, and optionally sessions and a target issue"
     A prompt script. Never asks a session open in a terminal; reports it instead.
+    --print-prompt prints the procedure, for an agent to follow itself.
 
   from-issues
     Start an interactive agent with GitHub issues pre-filled in its input.
@@ -289,6 +289,7 @@ Commands:
 
     agent run [--personal] [-m MODEL] [--no-tools]                prompt from stdin
     agent run [--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script
+    agent run --print-prompt FILE [ARG...]                        print its prompt instead
 
   sessions
     Find and resume the sessions you have had with coding agents.

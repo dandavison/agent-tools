@@ -30,7 +30,8 @@ SCRIPTS = {
 
     \b
     agent run [--personal] [-m MODEL] [--no-tools]                prompt from stdin
-    agent run [--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script""",
+    agent run [--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script
+    agent run --print-prompt FILE [ARG...]                        print its prompt instead""",
     "pick": """Choose a model ($AGENT_MODEL, else NAME, else fzf) and print it as JSON.
 
     \b
@@ -53,8 +54,9 @@ SCRIPTS = {
     "exfiltrate": """Get the sessions that discussed a topic to write what they know into log issues.
 
     \b
-    agent exfiltrate "TOPIC, and optionally sessions and a target issue"
-    A prompt script. Never asks a session open in a terminal; reports it instead.""",
+    agent exfiltrate [--print-prompt] "TOPIC, and optionally sessions and a target issue"
+    A prompt script. Never asks a session open in a terminal; reports it instead.
+    --print-prompt prints the procedure, for an agent to follow itself.""",
     "suggest-command": """Suggest a zsh command line that does what stdin describes.
 
     \b

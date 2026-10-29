@@ -8,6 +8,7 @@
 
     agent run [--personal] [-m MODEL]                  prompt from stdin, or typed at the terminal
     agent run [--personal] [-m MODEL] FILE [ARG...]    prompt script; ARGs and stdin are appended
+    agent run --print-prompt FILE [ARG...]             print the prompt instead of running it
 
 A prompt script starts with e.g. `#!/usr/bin/env -S agent run -m luna`. The model is
 $AGENT_MODEL if set, else -m MODEL, else chosen with fzf if there is a terminal.
@@ -34,9 +35,13 @@ def main() -> None:
     parser.add_argument("--personal", action="store_true")
     parser.add_argument("-m", dest="model")
     parser.add_argument("--no-tools", action="store_true")
+    parser.add_argument("--print-prompt", action="store_true")
     parser.add_argument("file", nargs="?", type=Path)
     parser.add_argument("args", nargs="*")
     args = parser.parse_args()
+    if args.print_prompt:
+        print(script_prompt(args.file, args.args))
+        return
 
     pick = pick_model(args.model, args.personal)
     os.environ.update(pick["env"])
@@ -68,8 +73,9 @@ def script_prompt(file: Path, args: list[str]) -> str:
     prompt = "".join(lines[1:] if lines and lines[0].startswith("#!") else lines)
     if args:
         prompt += f"\n\nArguments: {' '.join(args)}"
-    if not sys.stdin.isatty():
-        prompt += f"\n\nInput:\n{sys.stdin.read()}"
+    stdin = "" if sys.stdin.isatty() else sys.stdin.read()
+    if stdin:
+        prompt += f"\n\nInput:\n{stdin}"
     return prompt
 
 
