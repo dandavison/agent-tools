@@ -1,4 +1,4 @@
-"""Tests for agent ctx, using fake gh, agent-sessions, slack-to-md and tracecli."""
+"""Tests for agent ctx, using fake gh, agent sessions, slack-to-md and tracecli."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def home(tmp_path: Path) -> Path:
     heading containing their argv, then a code block."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for tool in ["agent-sessions", "slack-to-md", "tracecli"]:
+    for tool in ["agent", "slack-to-md", "tracecli"]:
         (bin_dir / tool).write_text(
             "#!/usr/bin/env bash\n"
             f'echo "# {tool} $*"\n'
@@ -91,7 +91,7 @@ def test_sources_are_included_raw_in_order_after_a_manifest(home: Path) -> None:
     issue = out.index("## issue:212\n")
     session = out.index("## session:7e90\n")
     assert manifest < issue < out.index("### Batch cancel\n") < session
-    assert session < out.index("### agent-sessions cat 7e90\n")
+    assert session < out.index("### agent sessions cat 7e90\n")
 
 
 def test_an_issue_says_which_repo_it_is_from(home: Path) -> None:
@@ -199,7 +199,7 @@ def test_session_source_is_read_by_agent_sessions_cat(
     result = ctx(home, source)
     assert result.returncode == 0, result.stderr
     assert f"| {source} | raw |" in result.stdout
-    assert f"\n### agent-sessions {argv}\n" in result.stdout
+    assert f"\n### agent sessions {argv}\n" in result.stdout
 
 
 def test_unknown_session_option_is_rejected(home: Path) -> None:
@@ -292,7 +292,7 @@ def test_recipe_builds_its_sources_with_purpose_and_exclusions(home: Path) -> No
     assert manifest < out.index("| session:7e90 --whole | raw |")
     assert "/ 1000" in out
     assert "first comment" in out and "second comment" not in out
-    assert "\n### agent-sessions cat 7e90 --whole\n" in out
+    assert "\n### agent sessions cat 7e90 --whole\n" in out
 
 
 def test_recipe_context_says_which_recipe_and_commit_built_it(home: Path) -> None:

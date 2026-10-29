@@ -78,7 +78,7 @@ def run(capsys: pytest.CaptureFixture[str]):
 def test_no_command_suggests_syncing(indexed: Path, run, args: tuple[str, ...]) -> None:
     """Syncing is the user's call. Suggesting it costs the agent a tool call."""
     _, out, err = run(*args)
-    assert "agent-sessions sync" not in out + err
+    assert "agent sessions sync" not in out + err
 
 
 def test_status_still_reports_staleness_as_a_fact(indexed: Path, run) -> None:
@@ -94,12 +94,12 @@ def test_finding_something_names_the_next_command(
     indexed: Path, run, args: tuple[str, ...]
 ) -> None:
     _, _, err = run(*args)
-    assert f"Next: agent-sessions show {ID} --turns" in err
+    assert f"Next: agent sessions show {ID} --turns" in err
 
 
 def test_show_names_what_comes_after_it(indexed: Path, run) -> None:
     _, _, err = run("show", ID)
-    assert f"agent-sessions cat {ID}@u1 --tools" in err
+    assert f"agent sessions cat {ID}@u1 --tools" in err
 
 
 def test_the_next_command_carries_a_real_id_not_a_placeholder(indexed: Path, run) -> None:
@@ -112,7 +112,7 @@ def test_the_next_command_carries_a_real_id_not_a_placeholder(indexed: Path, run
 def test_the_next_command_is_one_this_tool_accepts(indexed: Path, run) -> None:
     """Follow the hint literally and it must work."""
     _, _, err = run("search", "relocating")
-    suggested = err.split("Next: agent-sessions ")[1].split("   (")[0].split()
+    suggested = err.split("Next: agent sessions ")[1].split("   (")[0].split()
     code, out, _ = run(*suggested)
     assert code == 0
     assert "relocating" in out
@@ -232,7 +232,7 @@ def test_status_counts_sessions_not_the_tool(indexed: Path, run) -> None:
     """The row is a count of sessions; naming it after the command reads as nonsense."""
     _, out, _ = run("status")
     assert "sessions " in out
-    assert "agent-sessions " not in out
+    assert "agent sessions " not in out
 
 
 # --- one turn, rather than the whole session -------------------------------
@@ -341,7 +341,7 @@ def test_a_session_that_really_is_missing_still_reads_that_way(transcribed: str,
 def test_showing_turns_names_a_command_that_takes_one(transcribed: str, run) -> None:
     """The column of points is unusable until something says where they go."""
     _, _, err = run("show", transcribed, "--turns")
-    suggested = err.split("Next: agent-sessions ")[1].split("   (")[0].split()
+    suggested = err.split("Next: agent sessions ")[1].split("   (")[0].split()
     assert "@" in suggested[1]
     code, out, _ = run(*suggested)
     assert code == 0

@@ -14,7 +14,13 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_PATH = Path(__file__).parent.parent / "bin" / "agent-from-issues"
+SCRIPT_PATH = (
+    Path(__file__).parent.parent
+    / "src"
+    / "agent_tools"
+    / "libexec"
+    / "agent-from-issues"
+)
 
 CONFIG = """
 default_repo = "owl/notes"

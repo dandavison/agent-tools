@@ -15,7 +15,9 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_PATH = Path(__file__).parent.parent / "bin" / "agent-pick"
+SCRIPT_PATH = (
+    Path(__file__).parent.parent / "src" / "agent_tools" / "libexec" / "agent-pick"
+)
 
 CONFIG = """
 [accounts.personal]
@@ -141,7 +143,7 @@ def test_missing_price_cache_fails(config: Path) -> None:
     (config.parent / "openrouter-models.json").unlink()
     result = run(config, "luna")
     assert result.returncode != 0
-    assert "agent-prices-refresh" in result.stderr
+    assert "agent prices-refresh" in result.stderr
 
 
 def test_ctrl_c_in_fzf_exits_without_traceback(config: Path) -> None:

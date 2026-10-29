@@ -58,7 +58,11 @@ def overview(home: Path, *args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         check=False,
         text=True,
-        env={**os.environ, "PATH": f"{home / 'bin'}:{os.environ['PATH']}"},
+        env={
+            **os.environ,
+            "PATH": f"{home / 'bin'}:{os.environ['PATH']}",
+            "AGENT_EXEC_PATH": str(home / "bin"),
+        },
     )
 
 

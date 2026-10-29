@@ -8,18 +8,18 @@ def test_every_command_is_documented() -> None:
     """Generated from the command tree, so it cannot drift from the CLI."""
     text = skill.generate()
     for name in main.commands:
-        assert f"### `agent-sessions {name}" in text
+        assert f"### `agent sessions {name}" in text
 
 
 def test_commands_taking_an_id_say_so() -> None:
     text = skill.generate()
-    assert "### `agent-sessions show ID`" in text
-    assert "### `agent-sessions resume ID[@POINT]`" in text
-    assert "### `agent-sessions search QUERY`" in text
+    assert "### `agent sessions show ID`" in text
+    assert "### `agent sessions resume ID[@POINT]`" in text
+    assert "### `agent sessions search QUERY`" in text
 
 
 def test_commands_taking_nothing_have_no_stray_metavar() -> None:
-    assert "### `agent-sessions ls`" in skill.generate()
+    assert "### `agent sessions ls`" in skill.generate()
 
 
 def test_meaningful_flags_are_listed() -> None:
@@ -38,7 +38,7 @@ def test_universal_flags_are_left_out() -> None:
 
 def test_the_things_an_agent_would_otherwise_get_wrong_are_stated() -> None:
     text = skill.generate()
-    assert "agent-sessions sync" in text
+    assert "agent sessions sync" in text
     assert "not indexed" in text
     assert "Exit codes" in text
 
@@ -63,7 +63,7 @@ def test_install_is_idempotent(tmp_path: Path) -> None:
 
 def test_examples_are_carried_through(tmp_path: Path) -> None:
     text = skill.generate()
-    assert "$ agent-sessions search compaction" in text
+    assert "$ agent sessions search compaction" in text
     assert "```" in text
 
 

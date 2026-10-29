@@ -13,9 +13,9 @@ EOF
 
 source "${0:A:h:h}/shell/agent.zsh"
 
-[[ $(agent-text-command "what's in *.txt? |") = "agent-run <<< 'what'\\''s in *.txt?'" ]]
-[[ $(agent-text-command "fix the build|  ") = "agent-run <<< 'fix the build'" ]]
-[[ $(agent-text-command "explain this | luna") = "agent-run -m luna <<< 'explain this'" ]]
+[[ $(agent-text-command "what's in *.txt? |") = "agent run <<< 'what'\\''s in *.txt?'" ]]
+[[ $(agent-text-command "fix the build|  ") = "agent run <<< 'fix the build'" ]]
+[[ $(agent-text-command "explain this | luna") = "agent run -m luna <<< 'explain this'" ]]
 [[ $(agent-text-command "ls | less") = "" ]]
 [[ $(agent-text-command "echo '|'") = "" ]]
 [[ $(agent-text-command "true ||") = "" ]]
@@ -27,8 +27,12 @@ BUFFER=""
 
 # Ctrl-X Ctrl-A replaces the text in place, prints nothing, and records the text in atuin history.
 recorded=$(mktemp)
-agent-pick() { print -r -- '{"name": "luna"}' }
-agent-suggest-command() { [[ $AGENT_MODEL = luna ]] && print -r -- "ls *.jpg"; print -u2 -- "--- done ---" }
+agent() {
+    case $1 in
+        pick) print -r -- '{"name": "luna"}' ;;
+        suggest-command) [[ $AGENT_MODEL = luna ]] && print -r -- "ls *.jpg"; print -u2 -- "--- done ---" ;;
+    esac
+}
 atuin() { [[ "$1 $2" = "history start" ]] && print -r -- $4 >> $recorded && print -r -- id1; true }
 BUFFER="list toucan photos"
 output=$(agent-suggest-command-widget 2>&1; print -r -- "$BUFFER|$(<$recorded)")

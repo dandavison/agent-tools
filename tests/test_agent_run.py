@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).parent.parent
-SCRIPT_PATH = REPO / "bin" / "agent-run"
+SCRIPT_PATH = REPO / "src" / "agent_tools" / "libexec" / "agent-run"
 
 CONFIG = """
 [accounts.personal]
@@ -92,7 +92,9 @@ def home(tmp_path: Path) -> Path:
     bin_dir.mkdir()
     fake_cli(bin_dir / "claude", CLAUDE_EVENTS)
     fake_cli(bin_dir / "codex", CODEX_EVENTS)
-    (bin_dir / "agent-pick").symlink_to(REPO / "bin" / "agent-pick")
+    (bin_dir / "agent-pick").symlink_to(
+        REPO / "src" / "agent_tools" / "libexec" / "agent-pick"
+    )
     return tmp_path
 
 

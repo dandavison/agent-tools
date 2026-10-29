@@ -1,4 +1,4 @@
-"""Tests for agent quiz, using fake claude, agent-sessions and fzf."""
+"""Tests for agent quiz, using fake claude, agent sessions and fzf."""
 
 from __future__ import annotations
 
@@ -53,19 +53,21 @@ print(json.dumps({"session_id": sid, "result": f"{who} answers: {stdin.strip()[-
                   "total_cost_usd": total}))
 """
 
-FAKE_AGENT_SESSIONS = """\
+FAKE_AGENT = """\
 #!/usr/bin/env python3
 import json, os, sys
 from pathlib import Path
 home = Path(os.environ["QUIZ_HOME"])
-if sys.argv[1:2] == ["show"] and "--json" in sys.argv:
-    id = sys.argv[2]
+assert sys.argv[1] == "sessions"
+argv = sys.argv[1:]
+if argv[1:2] == ["show"] and "--json" in argv:
+    id = argv[2]
     print(json.dumps({"id": id, "agent": "claude", "native_id": id.split(":")[1],
                       "title": f"title of {id}", "model": "claude-opus-5-5",
                       "ended_at": "1792510162", "context_tokens": "107013",
                       "cwd": str(home / "work"), "path": str(home / "t.jsonl")}))
 else:
-    print("turns of", " ".join(sys.argv[1:]))
+    print("turns of", " ".join(argv[1:]))
 """
 
 FAKE_FZF = """\
@@ -87,12 +89,14 @@ def home(tmp_path: Path) -> Path:
     bin_dir.mkdir()
     for name, body in [
         ("claude", FAKE_CLAUDE),
-        ("agent-sessions", FAKE_AGENT_SESSIONS),
+        ("agent", FAKE_AGENT),
         ("fzf", FAKE_FZF),
     ]:
         (bin_dir / name).write_text(body)
         (bin_dir / name).chmod(0o755)
-    (bin_dir / "agent-pick").symlink_to(REPO / "bin" / "agent-pick")
+    (bin_dir / "agent-pick").symlink_to(
+        REPO / "src" / "agent_tools" / "libexec" / "agent-pick"
+    )
     return tmp_path
 
 

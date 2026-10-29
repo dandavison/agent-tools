@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).parent.parent
-SCRIPT_PATH = REPO / "bin" / "agent-new"
+SCRIPT_PATH = REPO / "src" / "agent_tools" / "libexec" / "agent-new"
 
 FAKE_PREPARE_SESSION = """\
 printf '%s|' "$@" >> "$HOME/prepare.calls"; echo >> "$HOME/prepare.calls"

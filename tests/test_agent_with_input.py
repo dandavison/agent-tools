@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).parent.parent
-SCRIPT_PATH = REPO / "bin" / "agent-with-input"
+SCRIPT_PATH = REPO / "src" / "agent_tools" / "libexec" / "agent-with-input"
 
 CONFIG = """
 [accounts.personal]
@@ -55,7 +55,9 @@ def home(tmp_path: Path) -> Path:
             f'echo "${{CLAUDE_CONFIG_DIR:-}}" > "{bin_dir}/{cli}.env"\n'
         )
         (bin_dir / cli).chmod(0o755)
-    (bin_dir / "agent-pick").symlink_to(REPO / "bin" / "agent-pick")
+    (bin_dir / "agent-pick").symlink_to(
+        REPO / "src" / "agent_tools" / "libexec" / "agent-pick"
+    )
     return tmp_path
 
 
