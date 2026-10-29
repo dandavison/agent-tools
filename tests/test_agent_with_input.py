@@ -91,8 +91,9 @@ def test_m_starts_picked_cli_with_model(home: Path) -> None:
     assert argv(home, "codex") == ["--model", "gpt-6-luna"]
 
 
-def test_personal_sets_account_env(home: Path) -> None:
-    result = run(home, "--personal", "-m", "opus")
+@pytest.mark.parametrize("personal", ["--personal", "-p"])
+def test_personal_sets_account_env(home: Path, personal: str) -> None:
+    result = run(home, personal, "-m", "opus")
     assert result.returncode == 0, result.stderr
     assert argv(home, "claude") == ["--model", "claude-opus-5-5"]
     assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"

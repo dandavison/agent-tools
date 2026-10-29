@@ -15,7 +15,15 @@ def test_skill_ends_with_the_current_cli_reference() -> None:
 
 def test_reference_has_every_agent_and_agent_sessions_command() -> None:
     text = reference()
-    for command in ["run", "ctx", "new", "quiz", "overview", "prepare-session", "sessions"]:
+    for command in [
+        "run",
+        "ctx",
+        "new",
+        "quiz",
+        "overview",
+        "prepare-session",
+        "sessions",
+    ]:
         assert f"\n  {command}\n" in text, command
     for command in ["search", "show", "cat", "tree", "resume", "attend", "serve"]:
         assert f"### `agent sessions {command}" in text, command

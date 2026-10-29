@@ -107,8 +107,9 @@ def test_no_committed_recipe_fails_without_starting(home: Path) -> None:
     assert not (home / "with-input.stdin").exists()
 
 
-def test_model_options_go_to_with_input(home: Path) -> None:
-    result = run(home, "--personal", "-m", "opus", recipe(home))
+@pytest.mark.parametrize("personal", ["--personal", "-p"])
+def test_model_options_go_to_with_input(home: Path, personal: str) -> None:
+    result = run(home, personal, "-m", "opus", recipe(home))
     assert result.returncode == 0, result.stderr
     assert (home / "with-input.argv").read_text() == (
         "--personal\n-m\nopus\n--name\nmeeting\n"

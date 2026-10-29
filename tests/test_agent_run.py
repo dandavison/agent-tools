@@ -206,8 +206,9 @@ def test_codex_answer_on_stdout_cost_on_stderr(home: Path) -> None:
     assert "$0.002" in result.stderr
 
 
-def test_personal_sets_account_env(home: Path) -> None:
-    result = run(home, "--personal", "-m", "opus", stdin="hello")
+@pytest.mark.parametrize("personal", ["--personal", "-p"])
+def test_personal_sets_account_env(home: Path, personal: str) -> None:
+    result = run(home, personal, "-m", "opus", stdin="hello")
     assert result.returncode == 0, result.stderr
     assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"
 

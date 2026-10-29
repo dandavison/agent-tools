@@ -106,8 +106,9 @@ def test_price_is_null_without_openrouter_id(config: Path) -> None:
     assert json.loads(result.stdout)["price"] is None
 
 
-def test_personal_sets_account_env(config: Path) -> None:
-    result = run(config, "--personal", "opus")
+@pytest.mark.parametrize("personal", ["--personal", "-p"])
+def test_personal_sets_account_env(config: Path, personal: str) -> None:
+    result = run(config, personal, "opus")
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["env"] == {
         "CLAUDE_CONFIG_DIR": str(Path("~/.claude-personal").expanduser()),
