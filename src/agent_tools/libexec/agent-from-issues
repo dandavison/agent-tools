@@ -4,7 +4,7 @@
 #
 # Start an interactive agent session via agent-with-input, which chooses the
 # model, with the input buffer pre-seeded with the content of the given GitHub
-# issues (fetched via gh-issue-to-md). Nothing is submitted.
+# issues (fetched via gh-issue-fetch). Nothing is submitted.
 #
 # All issues plus their labels go into a single paste, so the labels are
 # collapsed into the placeholder along with the content rather than being
@@ -98,7 +98,7 @@ trap 'rm -rf "$tmpdir"' EXIT
 for ((i = 0; i < ${#urls[@]}; i++)); do
     {
         echo "Here is the content of ${labels[i]}:"
-        gh-issue-to-md "${urls[i]}"
+        gh-issue-fetch "${urls[i]}"
         echo
     } >> "$tmpdir/prompt.md"
 done
