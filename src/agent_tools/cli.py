@@ -19,23 +19,23 @@ SCRIPTS = {
     "with-input": """Start an interactive agent with its input pre-filled from stdin.
 
     \b
-    agent with-input [--personal] [-m MODEL] [--name NAME] [-- AGENT [ARG...]] < FILE
+    agent with-input [-p|--personal] [-m MODEL] [--name NAME] [-- AGENT [ARG...]] < FILE
     Requires tmux. Nothing is submitted.""",
     "from-issues": """Start an interactive agent with GitHub issues pre-filled in its input.
 
     \b
-    agent from-issues [-R OWNER/REPO] [--personal] [-m MODEL] ISSUE... [-- AGENT [ARG...]]
+    agent from-issues [-R OWNER/REPO] [-p|--personal] [-m MODEL] ISSUE... [-- AGENT [ARG...]]
     ISSUE is a number or URL. Reads ~/.config/agent-from-issues.toml.""",
     "run": """Run a prompt non-interactively; the answer goes to stdout.
 
     \b
-    agent run [--personal] [-m MODEL] [--no-tools]                prompt from stdin
-    agent run [--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script
-    agent run --print-prompt FILE [ARG...]                        print its prompt instead""",
+    agent run [-p|--personal] [-m MODEL] [--no-tools]                prompt from stdin
+    agent run [-p|--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script
+    agent run --print-prompt FILE [ARG...]                           print its prompt instead""",
     "pick": """Choose a model ($AGENT_MODEL, else NAME, else fzf) and print it as JSON.
 
     \b
-    agent pick [--personal] [--list] [NAME]""",
+    agent pick [-p|--personal] [--list] [NAME]""",
     "prices-refresh": "Cache OpenRouter's model list, used for codex costs.",
     "prepare-session": """Prepare a context recipe for a new session described in plain language.
 
@@ -47,8 +47,8 @@ SCRIPTS = {
     "new": """Prepare a session from a description, then start it on Enter.
 
     \b
-    agent new [--personal] [-m MODEL] "DESCRIPTION OF THE SESSION"
-    agent new [--personal] [-m MODEL] RECIPE.toml
+    agent new [-p|--personal] [-m MODEL] "DESCRIPTION OF THE SESSION"
+    agent new [-p|--personal] [-m MODEL] RECIPE.toml
     Runs prepare-session and shows its report. Enter starts the session with the
     recipe's context; typed changes revise the recipe first. Requires tmux.""",
     "exfiltrate": """Get the sessions that discussed a topic to write what they know into log issues.

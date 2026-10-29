@@ -36,7 +36,7 @@ PRICES_PATH = Path(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("name", nargs="?")
-    parser.add_argument("--personal", action="store_true")
+    parser.add_argument("-p", "--personal", action="store_true")
     parser.add_argument("--list", action="store_true", help="print available models")
     args = parser.parse_args()
 
