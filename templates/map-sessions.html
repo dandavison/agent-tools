@@ -59,7 +59,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
 <main>
 <header>
   <h1>Stream Worktree Sessions</h1>
-  <p class="lede"><span id="scope"></span> Click a session id to copy its <code>agent-sessions resume</code> command. Summaries were written by subagents from transcripts; children of a fork are summarised from the fork point only.</p>
+  <p class="lede"><span id="scope"></span> Click a session id to copy its <code>agent sessions resume</code> command. Summaries were written by subagents from transcripts; children of a fork are summarised from the fork point only.</p>
 </header>
 
 <section>
@@ -266,7 +266,7 @@ document.querySelector("#issues tbody").innerHTML = Object.keys(byIssue).map(Num
 
 document.addEventListener("click", async e => {
   const b = e.target.closest(".sid"); if (!b) return;
-  const cmd = `agent-sessions resume claude:${b.dataset.id}`;
+  const cmd = `agent sessions resume claude:${b.dataset.id}`;
   try { await navigator.clipboard.writeText(cmd); b.textContent = "copied"; }
   catch { b.textContent = b.dataset.id; }
   b.classList.add("copied");

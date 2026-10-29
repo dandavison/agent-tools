@@ -94,7 +94,7 @@ recipe, which then picks up the written-back state.
 
 ## Past sessions
 
-`agent sessions` (also installed as `agent-sessions`) indexes the transcripts of Claude Code
+`agent sessions` indexes the transcripts of Claude Code
 sessions and finds, reads and resumes them.
 
     agent sessions search "worktree relocation" -p wormhole   # find it
@@ -212,7 +212,7 @@ Commands:
     issue:N | issue:URL | GITHUB_ISSUE_URL         the body and comments (N: log repo)
     issue:N#issuecomment-ID                        one comment
     "issue:N exclude=issuecomment-ID,..."          all but those comments
-    session:ID ["--whole"] ["--tools"]             agent-sessions cat (without --whole,
+    session:ID ["--whole"] ["--tools"]             agent sessions cat (without --whole,
                                                    only what followed the last compaction)
     session:ID@POINT                               the session up to that point's turn
     slack:URL | SLACK_URL                          slack-to-md
@@ -300,6 +300,12 @@ Commands:
 
     agent start -m opus --resume abc
 
+  suggest-command
+    Suggest a zsh command line that does what stdin describes.
+
+    agent suggest-command < DESCRIPTION
+    A prompt script, used by Ctrl-X Ctrl-A in shell/agent.zsh.
+
   with-input
     Start an interactive agent with its input pre-filled from stdin.
 
@@ -317,10 +323,10 @@ Start a coding agent that already knows this tool.
 - `--model` — Which model it should run, named as that agent names it.
 
 ```
-$ agent-sessions agent                                    # pi, knowing this tool
-$ agent-sessions agent --with qwen
-$ agent-sessions agent --model anthropic/claude-opus-5
-$ agent-sessions agent "pick up the compaction work"      # your own first task
+$ agent sessions agent                                    # pi, knowing this tool
+$ agent sessions agent --with qwen
+$ agent sessions agent --model anthropic/claude-opus-5
+$ agent sessions agent "pick up the compaction work"      # your own first task
 ```
 
 ### `agent sessions attend`
@@ -342,10 +348,10 @@ Print a session as markdown, read from the transcript itself.
 - `--upto` — Everything up to the end of the point's turn.
 
 ```
-$ agent-sessions cat claude:7e90a7c6 --tools         # the whole thing
-$ agent-sessions cat claude:7e90a7c6 --last          # only the turn just had
-$ agent-sessions cat claude:7e90a7c6@9f3c1d20        # only the turn around a point
-$ agent-sessions cat claude:7e90a7c6@9f3c1d20 --upto # everything up to that turn's end
+$ agent sessions cat claude:7e90a7c6 --tools         # the whole thing
+$ agent sessions cat claude:7e90a7c6 --last          # only the turn just had
+$ agent sessions cat claude:7e90a7c6@9f3c1d20        # only the turn around a point
+$ agent sessions cat claude:7e90a7c6@9f3c1d20 --upto # everything up to that turn's end
 ```
 
 ### `agent sessions forget ID`
@@ -353,8 +359,8 @@ $ agent-sessions cat claude:7e90a7c6@9f3c1d20 --upto # everything up to that tur
 Take a session out of the index, and its transcript out of the agent's reach.
 
 ```
-$ agent-sessions forget claude:7e90a7c6       # by the id Claude prints as it exits
-$ agent-sessions forget 7e90a7c6              # or any unambiguous prefix of it
+$ agent sessions forget claude:7e90a7c6       # by the id Claude prints as it exits
+$ agent sessions forget 7e90a7c6              # or any unambiguous prefix of it
 ```
 
 ### `agent sessions issue ID`
@@ -362,7 +368,7 @@ $ agent-sessions forget 7e90a7c6              # or any unambiguous prefix of it
 Put a session on the control channel, so it can be carried on from anywhere.
 
 ```
-$ agent-sessions issue claude:7e90a7c6      # reach it from a phone
+$ agent sessions issue claude:7e90a7c6      # reach it from a phone
 ```
 
 ### `agent sessions ls`
@@ -391,10 +397,10 @@ Pick a session back up, in the worktree it belongs to.
 - `--remote` — Hand it to the agent's remote control, for a phone.
 
 ```
-$ agent-sessions resume claude:7e90a7c6             # where it was left
-$ agent-sessions resume claude:7e90a7c6 --fork      # branch, leaving it as it is
-$ agent-sessions resume claude:7e90a7c6@9f3c1d20    # from a point inside it
-$ agent-sessions resume claude:7e90a7c6 --remote    # to carry on from a phone
+$ agent sessions resume claude:7e90a7c6             # where it was left
+$ agent sessions resume claude:7e90a7c6 --fork      # branch, leaving it as it is
+$ agent sessions resume claude:7e90a7c6@9f3c1d20    # from a point inside it
+$ agent sessions resume claude:7e90a7c6 --remote    # to carry on from a phone
 ```
 
 ### `agent sessions search QUERY`
@@ -411,17 +417,17 @@ Find agent-sessions whose text matches QUERY. Best match first, one per line.
 - `-n, --limit` — How many at most.
 
 ```
-$ agent-sessions search compaction                    # case-insensitive, and stemmed:
+$ agent sessions search compaction                    # case-insensitive, and stemmed:
                                                 # matches Compaction, compacted
-$ agent-sessions search "worktree relocation"         # both words, in any order
-$ agent-sessions search '"worktree relocation"'       # the exact phrase
-$ agent-sessions search 'nexus OR chasm'              # either
-$ agent-sessions search 'activity NOT workflow'       # one but not the other
-$ agent-sessions search 'reloc*'                      # prefix of the STEM: relocat*
+$ agent sessions search "worktree relocation"         # both words, in any order
+$ agent sessions search '"worktree relocation"'       # the exact phrase
+$ agent sessions search 'nexus OR chasm'              # either
+$ agent sessions search 'activity NOT workflow'       # one but not the other
+$ agent sessions search 'reloc*'                      # prefix of the STEM: relocat*
                                                 # would find nothing
-$ agent-sessions search compaction -p temporal --since 2w
-$ agent-sessions search compaction --min-context 500k -n 5
-$ agent-sessions search compaction -q | head -1       # bare id, to pipe
+$ agent sessions search compaction -p temporal --since 2w
+$ agent sessions search compaction --min-context 500k -n 5
+$ agent sessions search compaction -q | head -1       # bare id, to pipe
 ```
 
 ### `agent sessions serve`

@@ -1,7 +1,7 @@
-# Models offered by agent-pick (agent-oneshot, agent-from-issues).
+# Models offered by `agent pick` (`agent run`, `agent from-issues`).
 # cli: claude | codex | pi. A model with `health` is offered only if that URL responds.
 # openrouter: OpenRouter model id, used to look up prices in the cache written by
-# agent-prices-refresh. agent-oneshot uses them for codex (claude reports its own cost).
+# `agent prices-refresh`. `agent run` uses them for codex (claude reports its own cost).
 # Long-context price tiers are ignored.
 
 [accounts.personal]

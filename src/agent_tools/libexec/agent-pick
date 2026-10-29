@@ -80,7 +80,7 @@ def format_rows(models: list[dict[str, Any]]) -> str:
 
 def price(openrouter_id: str) -> dict[str, float]:
     if not PRICES_PATH.exists():
-        sys.exit(f"agent-pick: {PRICES_PATH} not found; run agent-prices-refresh")
+        sys.exit(f"agent pick: {PRICES_PATH} not found; run agent prices-refresh")
     for entry in json.loads(PRICES_PATH.read_text())["data"]:
         if entry["id"] == openrouter_id:
             per_token = entry["pricing"]
@@ -93,7 +93,7 @@ def price(openrouter_id: str) -> dict[str, float]:
                     ("output", "completion"),
                 ]
             }
-    sys.exit(f"agent-pick: {openrouter_id} not in {PRICES_PATH}")
+    sys.exit(f"agent pick: {openrouter_id} not in {PRICES_PATH}")
 
 
 def fzf(models: list[dict[str, Any]], personal: bool) -> str:
@@ -118,7 +118,7 @@ def find(models: list[dict[str, Any]], name: str) -> dict[str, Any]:
     for model in models:
         if model["name"] == name:
             return model
-    sys.exit(f"agent-pick: model not available: {name}")
+    sys.exit(f"agent pick: model not available: {name}")
 
 
 if __name__ == "__main__":

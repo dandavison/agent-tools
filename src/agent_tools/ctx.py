@@ -225,7 +225,7 @@ def read_session(uri: str, ref: str) -> str:
     if unknown := set(options) - SESSION_OPTIONS:
         raise SourceError(f"{uri}: unknown option {', '.join(sorted(unknown))}")
     upto = ["--upto"] if "@" in ref else []
-    return run(uri, ["agent-sessions", "cat", ref, *upto, *options])
+    return run(uri, ["agent", "sessions", "cat", ref, *upto, *options])
 
 
 def run(uri: str, argv: list[str]) -> str:

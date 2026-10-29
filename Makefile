@@ -1,8 +1,7 @@
 .PHONY: install test skill
 
 install:
-	mkdir -p ~/bin ~/.config
-	for f in bin/* prompts/*; do ln -sf "$(CURDIR)/$$f" ~/bin/$$(basename $$f); done
+	mkdir -p ~/.config
 	ln -sf "$(CURDIR)/config/agent-models.toml" ~/.config/agent-models.toml
 	uv tool install --editable --force .
 

@@ -13,6 +13,8 @@ from agent_tools.ctx import OverBudget, SourceError, build, build_recipe
 from agent_tools.overview import write_overview
 from agent_tools.quiz import quiz
 
+LIBEXEC = os.environ.get("AGENT_EXEC_PATH", str(Path(__file__).parent / "libexec"))
+
 SCRIPTS = {
     "with-input": """Start an interactive agent with its input pre-filled from stdin.
 
@@ -53,6 +55,11 @@ SCRIPTS = {
     \b
     agent exfiltrate "TOPIC, and optionally sessions and a target issue"
     A prompt script. Never asks a session open in a terminal; reports it instead.""",
+    "suggest-command": """Suggest a zsh command line that does what stdin describes.
+
+    \b
+    agent suggest-command < DESCRIPTION
+    A prompt script, used by Ctrl-X Ctrl-A in shell/agent.zsh.""",
     "mlx-serve": """Serve a local MLX model over an OpenAI-compatible API.
 
     \b
@@ -62,7 +69,7 @@ SCRIPTS = {
 
 
 class Script(click.Command):
-    """Runs agent-NAME with its arguments untouched, except a lone --help."""
+    """Runs libexec/agent-NAME with its arguments untouched, except a lone --help."""
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         if args == ["--help"]:
@@ -159,7 +166,7 @@ def ctx_command(
     issue:N | issue:URL | GITHUB_ISSUE_URL         the body and comments (N: log repo)
     issue:N#issuecomment-ID                        one comment
     "issue:N exclude=issuecomment-ID,..."          all but those comments
-    session:ID ["--whole"] ["--tools"]             agent-sessions cat (without --whole,
+    session:ID ["--whole"] ["--tools"]             agent sessions cat (without --whole,
                                                    only what followed the last compaction)
     session:ID@POINT                               the session up to that point's turn
     slack:URL | SLACK_URL                          slack-to-md
@@ -278,4 +285,5 @@ def model_names(prefix: str) -> list[str]:
 
 
 def main() -> None:
+    os.environ["PATH"] = f"{LIBEXEC}:{os.environ['PATH']}"
     cli()

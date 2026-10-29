@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# agent-with-input [--personal] [-m MODEL] [--name NAME] [-- <agent> [<arg>...]]
+# agent with-input [--personal] [-m MODEL] [--name NAME] [-- <agent> [<arg>...]]
 #
 # Start an interactive agent session (model chosen via agent-pick, unless an
 # explicit agent command follows "--") with the input buffer
@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-usage="Usage: agent-with-input [--personal] [-m MODEL] [--name NAME] [-- <agent> [<arg>...]]"
+usage="Usage: agent with-input [--personal] [-m MODEL] [--name NAME] [-- <agent> [<arg>...]]"
 pick_args=()
 agent=()
 name=""
@@ -38,12 +38,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "${TMUX:-}" ]]; then
-    echo "Error: agent-with-input must be run inside tmux" >&2
+    echo "Error: agent with-input must be run inside tmux" >&2
     exit 1
 fi
 
 if [[ -t 0 ]]; then
-    echo "Error: agent-with-input expects input on stdin" >&2
+    echo "Error: agent with-input expects input on stdin" >&2
     exit 1
 fi
 

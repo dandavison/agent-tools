@@ -98,7 +98,7 @@ def resume(session: dict, fork: bool = False, at: str = "", remote: bool = False
 def _transcript(session: dict) -> Path:
     path = Path(session["path"])
     if not path.exists():
-        raise NotResumable(f"{path} is gone. Run `agent-sessions sync`.")
+        raise NotResumable(f"{path} is gone. Run `agent sessions sync`.")
     return path
 
 

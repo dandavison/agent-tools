@@ -12,7 +12,7 @@ from pathlib import Path
 
 from agent_tools.ctx import SourceError, build_recipe, load_recipe
 
-PREVIEW = "agent-sessions show {1} --turns --format human | tail -n 30 | cut -c1-200"
+PREVIEW = "agent sessions show {1} --turns --format human | tail -n 30 | cut -c1-200"
 
 
 @dataclass
@@ -93,13 +93,13 @@ def choose(ids: list[str]) -> dict:
 
 def describe(id: str) -> dict:
     result = subprocess.run(
-        ["agent-sessions", "show", id, "--json"],
+        ["agent", "sessions", "show", id, "--json"],
         capture_output=True,
         check=False,
         text=True,
     )
     if result.returncode != 0:
-        raise SourceError(f"{id}: agent-sessions show exited {result.returncode}")
+        raise SourceError(f"{id}: agent sessions show exited {result.returncode}")
     return json.loads(result.stdout)
 
 

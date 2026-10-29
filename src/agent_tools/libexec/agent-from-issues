@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# agent-from-issues [-R owner/repo] [--personal] [-m MODEL] <issue-number-or-url>... [-- <agent> [<arg>...]]
+# agent from-issues [-R owner/repo] [--personal] [-m MODEL] <issue-number-or-url>... [-- <agent> [<arg>...]]
 #
 # Start an interactive agent session via agent-with-input, which chooses the
 # model, with the input buffer pre-seeded with the content of the given GitHub
@@ -60,7 +60,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#issues[@]} -eq 0 ]]; then
-    echo "Usage: agent-from-issues [-R owner/repo] [--personal] [-m MODEL] <issue-number-or-url>... [-- <agent> [<arg>...]]" >&2
+    echo "Usage: agent from-issues [-R owner/repo] [--personal] [-m MODEL] <issue-number-or-url>... [-- <agent> [<arg>...]]" >&2
     exit 1
 fi
 

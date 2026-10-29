@@ -43,7 +43,7 @@ kill whatever is listening on port 8080
 Write a command in English (`~/bin/commit-msg`):
 
 ```
-#!/usr/bin/env -S agent-run -m luna
+#!/usr/bin/env -S agent run -m luna
 Write a git commit message for the diff in the input. The first line says what problem the
 change solves.
 ```
@@ -112,7 +112,7 @@ Dashed boxes are commands; dashed arrows return output to whoever ran them. Rend
 ```d2
 direction: right
 
-prep: agent prepare-session\n(agent-run prompt script) {
+prep: agent prepare-session\n(agent run prompt script) {
   top: 0
   left: 0
   style.stroke-dash: 3
@@ -153,7 +153,7 @@ sources: Sources {
   top: 0
   left: 1150
   issues: Log issues\n(hub, INDEX.md) {shape: page; style.multiple: true}
-  sessions: Session transcripts\n(agent-sessions) {shape: page; style.multiple: true}
+  sessions: Session transcripts\n(agent sessions) {shape: page; style.multiple: true}
   other: Slack threads,\nmeetings, files {shape: page; style.multiple: true}
 }
 
@@ -185,10 +185,10 @@ b -> sources.issues: 13. write back what it learned
 
 ## Tools
 
-`agent --help` documents every subcommand. Most subcommands run a script in `bin/`, which can
-also be run directly as `agent-<subcommand>`. `agent sessions` (also installed as
-`agent-sessions`) finds, indexes and resumes past sessions; [`sessions/`](sessions/README.md)
-documents it.
+`agent --help` documents every subcommand. Most subcommands run a script in
+`src/agent_tools/libexec/`, which `agent` puts first on PATH; `agent` is the only installed
+executable. `agent sessions` finds, indexes and resumes past sessions;
+[`sessions/`](sessions/README.md) documents it.
 
 | | |
 |-|-|
@@ -206,14 +206,13 @@ documents it.
 | `agent with-input` | Start an interactive agent with its input pre-filled from stdin. |
 | `agent from-issues` | Same, from GitHub issues. Reads `~/.config/agent-from-issues.toml`. |
 | `agent mlx-serve` | Serve a local MLX model over an OpenAI-compatible API. |
-| `agent-suggest-command` | The prompt script behind Ctrl-X Ctrl-A. |
+| `agent suggest-command` | The prompt script behind Ctrl-X Ctrl-A. |
 | `shell/agent.zsh` | The `\|` trigger, `\|` Tab, and Ctrl-X Ctrl-A. |
 
 ## Install
 
 ```
-make install    # symlink bin/ and prompts/ into ~/bin, config/agent-models.toml into ~/.config;
-                # install agent with uv tool
+make install    # symlink config/agent-models.toml into ~/.config; install agent with uv tool
 make test
 ```
 
@@ -221,5 +220,5 @@ Then source `shell/agent.zsh` from your zshrc. To teach an agent these tools, li
 as a skill, e.g. `ln -s ~/src/agent-tools ~/.claude/skills/agent-tools`.
 
 Requires `uv`, `fzf`, `jq`, `rlwrap`, `tmux`, `atuin`, and whichever of `claude`, `codex`, `pi` you
-configure. `agent-from-issues` also needs `gh-issue-to-md` from
+configure. `agent from-issues` also needs `gh-issue-to-md` from
 [dandavison/tools](https://github.com/dandavison/tools).

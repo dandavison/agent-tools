@@ -1,7 +1,7 @@
-# Text ending in "|" or "| MODEL" (a model name in agent-models.toml) is sent to agent-run
+# Text ending in "|" or "| MODEL" (a model name in agent-models.toml) is sent to `agent run`
 # instead of to zsh. A trailing "|" is incomplete shell syntax, but "| MODEL" shadows a real
 # pipeline into a command with that name.
-# Ctrl-X Ctrl-A replaces the prompt's text with a command suggested by agent-suggest-command. The
+# Ctrl-X Ctrl-A replaces the prompt's text with a command suggested by `agent suggest-command`. The
 # text is recorded in atuin history; undo (Ctrl-_) also restores it. Tab directly after a trailing
 # "|" does the same with the text before the "|"; this shadows completing a command name after a
 # pipe with no space.
@@ -10,7 +10,7 @@ agent-text-command() {
     [[ $1 =~ '^(.*[^|[:space:]])[[:space:]]*\|[[:space:]]*([[:alnum:]_.-]*)[[:space:]]*$' ]] || return 0
     local text=$match[1] model=$match[2]
     [[ -z $model ]] || (( ${${(f)"$(agent-model-names)"}[(Ie)$model]} )) || return 0
-    print -r -- "agent-run${model:+ -m $model} <<< ${(qq)text}"
+    print -r -- "agent run${model:+ -m $model} <<< ${(qq)text}"
 }
 
 agent-model-names() {
@@ -29,13 +29,13 @@ agent-accept-line() {
 agent-suggest-command-widget() {
     local text=${1:-$BUFFER}
     [[ -n $text ]] || return
-    local model=$(agent-pick | jq -r .name)
+    local model=$(agent pick | jq -r .name)
     zle reset-prompt
     [[ -n $model ]] || return
     zle -M "asking $model..."
     zle -R
     local cmd err=$(mktemp)
-    if cmd=$(print -r -- "$text" | AGENT_MODEL=$model agent-suggest-command 2>$err); then
+    if cmd=$(print -r -- "$text" | AGENT_MODEL=$model agent suggest-command 2>$err); then
         agent-record-history "$text"
         BUFFER=$cmd
         CURSOR=$#BUFFER

@@ -6,10 +6,10 @@
 # ///
 """Run a prompt non-interactively on a model chosen by agent-pick.
 
-    agent-run [--personal] [-m MODEL]                  prompt from stdin, or typed at the terminal
-    agent-run [--personal] [-m MODEL] FILE [ARG...]    prompt script; ARGs and stdin are appended
+    agent run [--personal] [-m MODEL]                  prompt from stdin, or typed at the terminal
+    agent run [--personal] [-m MODEL] FILE [ARG...]    prompt script; ARGs and stdin are appended
 
-A prompt script starts with e.g. `#!/usr/bin/env -S agent-run -m luna`. The model is
+A prompt script starts with e.g. `#!/usr/bin/env -S agent run -m luna`. The model is
 $AGENT_MODEL if set, else -m MODEL, else chosen with fzf if there is a terminal.
 The answer goes to stdout; tool calls and cost go to stderr. --no-tools disables tools for
 claude and pi; codex cannot disable them, so it gets a read-only sandbox instead.
@@ -47,7 +47,7 @@ def main() -> None:
 
 def pick_model(name: str | None, personal: bool) -> dict[str, Any]:
     if not (name or os.environ.get("AGENT_MODEL")) and not sys.stderr.isatty():
-        sys.exit("agent-run: no model: set AGENT_MODEL or pass -m")
+        sys.exit("agent run: no model: set AGENT_MODEL or pass -m")
     result = subprocess.run(
         [
             "agent-pick",

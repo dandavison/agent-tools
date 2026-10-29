@@ -1,4 +1,4 @@
-"""The agent-sessions command line."""
+"""The agent sessions command line."""
 
 import sqlite3
 import sys
@@ -96,16 +96,16 @@ class Main(click.Group):
     context_settings={"help_option_names": ["-h", "--help"]},
     epilog="""\b
 Examples
-  $ agent-sessions sync
-  $ agent-sessions search "worktree relocation" -p wormhole
-  $ agent-sessions ls -p temporal --since 2w
-  $ agent-sessions show claude:7e90a7c6 --turns
-  $ agent-sessions tree claude:7e90a7c6
-  $ agent-sessions cat claude:7e90a7c6 --tools
-  $ agent-sessions resume claude:7e90a7c6
-  $ agent-sessions resume claude:7e90a7c6@9f3c1d20
-  $ agent-sessions issue claude:7e90a7c6
-  $ agent-sessions attend
+  $ agent sessions sync
+  $ agent sessions search "worktree relocation" -p wormhole
+  $ agent sessions ls -p temporal --since 2w
+  $ agent sessions show claude:7e90a7c6 --turns
+  $ agent sessions tree claude:7e90a7c6
+  $ agent sessions cat claude:7e90a7c6 --tools
+  $ agent sessions resume claude:7e90a7c6
+  $ agent sessions resume claude:7e90a7c6@9f3c1d20
+  $ agent sessions issue claude:7e90a7c6
+  $ agent sessions attend
 """,
 )
 @click.version_option()
@@ -144,7 +144,7 @@ def sync(agents: tuple[str, ...], fmt: str | None, as_json: bool, quiet: bool) -
             "forgotten": result.forgotten,
         }
     )
-    out.hint('Next: agent-sessions search "<words>" | agent-sessions ls -p <project> --since 2w')
+    out.hint('Next: agent sessions search "<words>" | agent sessions ls -p <project> --since 2w')
 
 
 @main.command()
@@ -219,17 +219,17 @@ def filters(project, agent, since, min_context, source, recipe, any_source) -> q
 @main.command(
     epilog="""\b
 Examples
-  $ agent-sessions search compaction                    # case-insensitive, and stemmed:
+  $ agent sessions search compaction                    # case-insensitive, and stemmed:
                                                   # matches Compaction, compacted
-  $ agent-sessions search "worktree relocation"         # both words, in any order
-  $ agent-sessions search '"worktree relocation"'       # the exact phrase
-  $ agent-sessions search 'nexus OR chasm'              # either
-  $ agent-sessions search 'activity NOT workflow'       # one but not the other
-  $ agent-sessions search 'reloc*'                      # prefix of the STEM: relocat*
+  $ agent sessions search "worktree relocation"         # both words, in any order
+  $ agent sessions search '"worktree relocation"'       # the exact phrase
+  $ agent sessions search 'nexus OR chasm'              # either
+  $ agent sessions search 'activity NOT workflow'       # one but not the other
+  $ agent sessions search 'reloc*'                      # prefix of the STEM: relocat*
                                                   # would find nothing
-  $ agent-sessions search compaction -p temporal --since 2w
-  $ agent-sessions search compaction --min-context 500k -n 5
-  $ agent-sessions search compaction -q | head -1       # bare id, to pipe
+  $ agent sessions search compaction -p temporal --since 2w
+  $ agent sessions search compaction --min-context 500k -n 5
+  $ agent sessions search compaction -q | head -1       # bare id, to pipe
 """
 )
 @click.argument("query_text", metavar="QUERY")
@@ -261,7 +261,7 @@ def search(
     you wanted a prefix for anyway.
 
     Tool calls and their output are deliberately not indexed, so this searches
-    what was said, not what was run. Use `agent-sessions cat --tools` for those.
+    what was said, not what was run. Use `agent sessions cat --tools` for those.
     """
     out = renderer(fmt, as_json, quiet)
     conn = db.connect()
@@ -374,10 +374,10 @@ def _draw(out: Renderer, segment: topology.Segment, prefix: str, last: bool) -> 
 @main.command(
     epilog="""\b
 Examples
-  $ agent-sessions cat claude:7e90a7c6 --tools         # the whole thing
-  $ agent-sessions cat claude:7e90a7c6 --last          # only the turn just had
-  $ agent-sessions cat claude:7e90a7c6@9f3c1d20        # only the turn around a point
-  $ agent-sessions cat claude:7e90a7c6@9f3c1d20 --upto # everything up to that turn's end
+  $ agent sessions cat claude:7e90a7c6 --tools         # the whole thing
+  $ agent sessions cat claude:7e90a7c6 --last          # only the turn just had
+  $ agent sessions cat claude:7e90a7c6@9f3c1d20        # only the turn around a point
+  $ agent sessions cat claude:7e90a7c6@9f3c1d20 --upto # everything up to that turn's end
 """
 )
 @click.argument("id", metavar="ID[@POINT]")
@@ -410,7 +410,7 @@ def cat(id: str, tools: bool, whole: bool, last: bool, upto: bool) -> None:
     source = index.SOURCES[session["agent"]]
     path = Path(session["path"])
     if not path.exists():
-        raise click.UsageError(f"{path} is gone. Run `agent-sessions sync`.")
+        raise click.UsageError(f"{path} is gone. Run `agent sessions sync`.")
     conversation = source.blocks(path, tip=True, whole=whole)
     if upto:
         conversation = _upto(conversation, at)
@@ -437,7 +437,7 @@ def _turn_at(conversation: list[Block], at: str) -> models.Turn:
     if turn is None:
         raise click.UsageError(
             f"{display.point(at)} is in no turn of this session."
-            " Try a point from `agent-sessions show --turns`."
+            " Try a point from `agent sessions show --turns`."
         )
     return turn
 
@@ -457,10 +457,10 @@ def _write(chunks: Iterator[str]) -> None:
 @main.command(
     epilog="""\b
 Examples
-  $ agent-sessions resume claude:7e90a7c6             # where it was left
-  $ agent-sessions resume claude:7e90a7c6 --fork      # branch, leaving it as it is
-  $ agent-sessions resume claude:7e90a7c6@9f3c1d20    # from a point inside it
-  $ agent-sessions resume claude:7e90a7c6 --remote    # to carry on from a phone
+  $ agent sessions resume claude:7e90a7c6             # where it was left
+  $ agent sessions resume claude:7e90a7c6 --fork      # branch, leaving it as it is
+  $ agent sessions resume claude:7e90a7c6@9f3c1d20    # from a point inside it
+  $ agent sessions resume claude:7e90a7c6 --remote    # to carry on from a phone
 """
 )
 @click.argument("id", metavar="ID[@POINT]")
@@ -498,7 +498,7 @@ def resume(id: str, fork: bool, remote: bool, fmt: str | None, as_json: bool, qu
     if resumed.remote_home:
         out.hint(f"Carry it on at {resumed.remote_home}, or in the Claude app.")
     if resumed.at:
-        out.hint(f"{resumed.resumed_as} is new; run `agent-sessions sync` to index it.")
+        out.hint(f"{resumed.resumed_as} is new; run `agent sessions sync` to index it.")
 
 
 @main.command()
@@ -523,8 +523,8 @@ def rename(id: str, title: str, fmt: str | None, as_json: bool, quiet: bool) -> 
 @main.command(
     epilog="""\b
 Examples
-  $ agent-sessions forget claude:7e90a7c6       # by the id Claude prints as it exits
-  $ agent-sessions forget 7e90a7c6              # or any unambiguous prefix of it
+  $ agent sessions forget claude:7e90a7c6       # by the id Claude prints as it exits
+  $ agent sessions forget 7e90a7c6              # or any unambiguous prefix of it
 """
 )
 @click.argument("id")
@@ -561,7 +561,7 @@ def _name(conn: sqlite3.Connection, id: str) -> str:
 @main.command(
     epilog="""\b
 Examples
-  $ agent-sessions issue claude:7e90a7c6      # reach it from a phone
+  $ agent sessions issue claude:7e90a7c6      # reach it from a phone
 """
 )
 @click.argument("id")
@@ -581,7 +581,7 @@ def issue(id: str, fmt: str | None, as_json: bool, quiet: bool) -> None:
     session = _resolve(conn, id)
     opened = attend.issue_for(channel.Channel(), session)
     out.record({"id": session["id"], "issue": opened.number, "url": opened.url})
-    out.hint(f"Comment on {opened.url} to carry it on. `agent-sessions attend` must be running.")
+    out.hint(f"Comment on {opened.url} to carry it on. `agent sessions attend` must be running.")
 
 
 @main.command(name="attend")
@@ -644,7 +644,7 @@ def serve(
     if lan:
         host = web.EVERY_INTERFACE
     local = f"http://{web.HOST}:{port}/"
-    print(f"agent-sessions at {local}", file=sys.stderr)
+    print(f"agent sessions at {local}", file=sys.stderr)
     if lan:
         _announce(web.reachable(port))
     log.VERBOSE = verbose
@@ -665,7 +665,7 @@ def _bound(host: str, port: int) -> Any:
     except OSError as e:
         raise click.UsageError(
             f"cannot listen on {host}:{port} ({e.strerror})."
-            " Another agent-sessions serve is the usual reason."
+            " Another agent sessions serve is the usual reason."
         ) from e
 
 
@@ -706,10 +706,10 @@ def _announce(urls: list[str]) -> None:
 @main.command(
     epilog="""\b
 Examples
-  $ agent-sessions agent                                    # pi, knowing this tool
-  $ agent-sessions agent --with qwen
-  $ agent-sessions agent --model anthropic/claude-opus-5
-  $ agent-sessions agent "pick up the compaction work"      # your own first task
+  $ agent sessions agent                                    # pi, knowing this tool
+  $ agent sessions agent --with qwen
+  $ agent sessions agent --model anthropic/claude-opus-5
+  $ agent sessions agent "pick up the compaction work"      # your own first task
 """
 )
 @click.option(
@@ -773,12 +773,12 @@ def _unresolved(conn: sqlite3.Connection, id: str) -> str:
     if at:
         return (
             f"this command takes a session, not a point. Try `{named}`,"
-            f" or `agent-sessions cat {id}` for that turn alone."
+            f" or `agent sessions cat {id}` for that turn alone."
         )
     bare = id.partition(":")[2] or id
     if holder := query.session_of(conn, bare):
         return f"{bare} is a point in {holder}, not a session. Try `{holder}@{bare}`."
-    return f"no single session matches {id!r}. Try `agent-sessions search` or a longer prefix."
+    return f"no single session matches {id!r}. Try `agent sessions search` or a longer prefix."
 
 
 def _resolve_point(conn: sqlite3.Connection, id: str) -> tuple[dict, str]:
@@ -791,7 +791,7 @@ def _resolve_point(conn: sqlite3.Connection, id: str) -> tuple[dict, str]:
     if point is None:
         raise click.UsageError(
             f"no single point in {session['id']} matches {at!r}."
-            " Try `agent-sessions tree` or a longer prefix."
+            " Try `agent sessions tree` or a longer prefix."
         )
     return session, point["uuid"]
 
@@ -809,7 +809,7 @@ def _next(out: Renderer, id: str, ready: str, *others: str) -> None:
     three times would not: one runnable command and the other verbs is
     enough to act on.
     """
-    out.hint(f"Next: agent-sessions {ready.format(id=id)}   (also: {', '.join(others)})")
+    out.hint(f"Next: agent sessions {ready.format(id=id)}   (also: {', '.join(others)})")
 
 
 def _ago(when: int | None) -> str:
@@ -823,7 +823,7 @@ def _ago(when: int | None) -> str:
 
 
 def run(argv: list[str] | None = None) -> int:
-    """The agent-sessions entry point."""
+    """The agent sessions entry point."""
     try:
         main.main(args=argv)
     except SystemExit as e:

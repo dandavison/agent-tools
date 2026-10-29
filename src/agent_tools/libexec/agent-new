@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# agent-new [--personal] [-m MODEL] "DESCRIPTION OF THE SESSION"
-# agent-new [--personal] [-m MODEL] RECIPE.toml
+# agent new [--personal] [-m MODEL] "DESCRIPTION OF THE SESSION"
+# agent new [--personal] [-m MODEL] RECIPE.toml
 #
 # Prepare a recipe for a session described in plain language (agent-prepare-session) and
 # show its report. Enter then starts the session with the recipe's context (agent-with-input);
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-usage='Usage: agent-new [--personal] [-m MODEL] "DESCRIPTION" | RECIPE.toml'
+usage='Usage: agent new [--personal] [-m MODEL] "DESCRIPTION" | RECIPE.toml'
 log=~/src/temporalio-etc/log
 with_input_args=()
 while [[ $# -gt 0 ]]; do
@@ -36,7 +36,7 @@ prepare() {
     agent-prepare-session "$@"
     changed="$(git -C "$log" diff --name-only "$before" HEAD -- 'recipes/*.toml')"
     if [[ -z "$changed" || "$changed" == *$'\n'* ]]; then
-        echo "agent-new: expected one committed recipe, found: ${changed:-no recipe}" >&2
+        echo "agent new: expected one committed recipe, found: ${changed:-no recipe}" >&2
         exit 1
     fi
     recipe="$log/$changed"

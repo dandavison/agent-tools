@@ -1,8 +1,8 @@
-#!/usr/bin/env -S agent-run -m opus
+#!/usr/bin/env -S agent run -m opus
 You prepare a context recipe for a new agent session, which we call B. Dan describes B: its
 purpose, what it should know, and what it must not see. You choose B's sources, check them,
 and save a recipe that `agent ctx` builds deterministically. You never start B, and never run
-`agent with-input`, `agent start`, `claude` or `agent-sessions resume`.
+`agent with-input`, `agent start`, `claude` or `agent sessions resume`.
 
 You run non-interactively, so you cannot ask Dan anything mid-run. Every run ends with the
 recipe written and committed, and a report. The commit is the approval: Dan reviews it with
@@ -62,9 +62,9 @@ awaits Dan, such as a posting he has not approved, in TOML comments at the top o
 - The hub is the issue holding the current state of knowledge on B's topic. Follow its own
   index, Decisions section, or links to find the other issues B needs.
 - Prefer log issues to session transcripts. Use a session only for material that was never
-  written down, and then read it with `agent-sessions cat ID --whole`: without `--whole`, cat
-  shows only what followed the last compaction. Find sessions with `agent-sessions search`
-  and `ls`, and lineages with `agent-sessions tree`. A session source is `session:ID --whole`,
+  written down, and then read it with `agent sessions cat ID --whole`: without `--whole`, cat
+  shows only what followed the last compaction. Find sessions with `agent sessions search`
+  and `ls`, and lineages with `agent sessions tree`. A session source is `session:ID --whole`,
   or `session:ID@POINT` for the session as it stood at a point.
 
 ## 2. Check freshness
@@ -75,10 +75,10 @@ find material newer than that:
 - Meetings: `tracecli list`, and transcript issues in the log like #411.
 - Slack: `agent-slack search messages` (with `--after`, and `--user` for the people
   involved), grouped by thread; a thread is the source `slack:URL`, read by `slack-to-md`.
-- Sessions: `agent-sessions sync`, then `agent-sessions search` with several queries from
-  B's topic, and `agent-sessions show ID --turns` on each match. For each session on topic,
+- Sessions: `agent sessions sync`, then `agent sessions search` with several queries from
+  B's topic, and `agent sessions show ID --turns` on each match. For each session on topic,
   find whether it wrote back after its last substantive turn: grep
-  `agent-sessions cat ID --tools --whole` for `gh issue comment` and `issuecomment-`, and
+  `agent sessions cat ID --tools --whole` for `gh issue comment` and `issuecomment-`, and
   compare those times with its turns.
 
 Add each item that is on topic, and list it in the report with a one-line reason, so Dan
@@ -95,8 +95,8 @@ Turn each of Dan's exclusions into a rule with a stated reason. A rule can be ab
   material is itself excluded, however harmless it looks. Log issue comments are posted by
   agents as @dandavison, so find the session that wrote a comment by searching the raw
   transcripts for its id: `rg -l issuecomment-ID ~/.claude/projects ~/.claude-personal/projects`.
-  Check what that session saw with `agent-sessions tree ID` and a grep over
-  `agent-sessions cat ID --tools --whole` for the excluded names, repos, paths and URLs.
+  Check what that session saw with `agent sessions tree ID` and a grep over
+  `agent sessions cat ID --tools --whole` for the excluded names, repos, paths and URLs.
   Check its forks and its parent up to the fork point too.
 - Record each check in the recipe's provenance: what was checked, how, and the result,
   with session ids and comment ids.
