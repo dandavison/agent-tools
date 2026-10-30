@@ -6,6 +6,7 @@ opens a terminal in which the agent finds nothing and exits. That is not
 visible from the index, and it is what these are about.
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -20,8 +21,8 @@ NATIVE = "7e90a7c6-ce43-4dfd-9d7c-8eb01ac7ccf2"
 
 
 def encoded(cwd: Path) -> str:
-    """Claude's name for a cwd's transcript directory: every / and . becomes a dash."""
-    return str(cwd).replace("/", "-").replace(".", "-")
+    """Claude's name for a cwd's transcript directory: all but letters and digits become dashes."""
+    return re.sub(r"[^A-Za-z0-9]", "-", str(cwd))
 
 
 @pytest.fixture

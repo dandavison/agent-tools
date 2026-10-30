@@ -11,6 +11,7 @@ point of the index is work I took part in, and nobody talked to those.
 """
 
 import os
+import re
 import shlex
 from collections import defaultdict
 from collections.abc import Iterator
@@ -151,8 +152,8 @@ class ClaudeSource:
 
 
 def encode(cwd: str) -> str:
-    """Claude's name for a cwd's transcript directory. Holds for all 506 of mine."""
-    return cwd.replace("/", "-").replace(".", "-")
+    """Claude's name for a cwd's transcript directory."""
+    return re.sub(r"[^A-Za-z0-9]", "-", cwd)
 
 
 def _discovered(id: str, path: Path) -> Discovered:
