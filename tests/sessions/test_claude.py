@@ -20,7 +20,7 @@ from conftest import (
 
 from agent_sessions import index, limits
 from agent_sessions.models import Delta, Running, Said
-from agent_sessions.sources.claude import ClaudeSource, blocks, parse, render_blocks
+from agent_sessions.sources.claude import ClaudeSource, blocks, encode, parse, render_blocks
 from agent_sessions.sources.claude import _read as read
 from agent_sessions.sources.claude import live as claude_live
 
@@ -914,3 +914,8 @@ def test_another_account_forgets_prompts_from_its_own_history(tmp_path: Path) ->
     history.write_bytes(orjson.dumps({"display": "hi", "sessionId": SESSION}) + b"\n")
     source.expunge(path, tmp_path / "forgotten")
     assert history.read_bytes() == b""
+
+
+def test_encode_replaces_every_non_alphanumeric_character():
+    cwd = "/Users/dan/worktrees/delta/2083_feat_side_by_side_min_width/delta"
+    assert encode(cwd) == "-Users-dan-worktrees-delta-2083-feat-side-by-side-min-width-delta"
