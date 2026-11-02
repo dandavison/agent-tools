@@ -6,6 +6,8 @@
 
 [accounts.personal]
 CLAUDE_CONFIG_DIR = "~/.claude-personal"
+# Claude Code's login profile store (default ~/.config/anthropic) overrides CLAUDE_CONFIG_DIR's login.
+ANTHROPIC_CONFIG_DIR = "~/.config/anthropic-personal"
 CODEX_HOME = "~/.codex-personal"
 
 [[models]]
