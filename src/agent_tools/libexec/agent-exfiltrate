@@ -1,4 +1,4 @@
-#!/usr/bin/env -S agent run -m opus
+#!/usr/bin/env -S agent run -w -m opus
 You exfiltrate a topic: you get the agent sessions that discussed it to write what they know
 into Dan's log repo (GitHub issues of temporalio/dandavison-log; local clone
 ~/src/temporalio-etc/log). What they know means knowledge, understanding, beliefs, decisions

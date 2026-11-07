@@ -8,12 +8,17 @@
 
 The model is $AGENT_MODEL if set, else NAME, else chosen with fzf.
 
-Output: {"name", "cli", "model", "env", "price"}, where env holds the account's variables if
---personal, and price is the model's USD per million tokens (from the OpenRouter model list
+The account (work or personal) is the one whose `paths` contain the repo's main checkout
+(the parent of its git common dir, so a worktree counts as its repo), or the current directory
+outside a repo. -p/-w must agree with that, and are required where no account's paths match.
+With --anywhere, -p/-w override the paths, for prompt scripts whose directory is incidental.
+
+Output: {"name", "cli", "model", "account", "env", "price"}, where env holds the account's
+variables, and price is the model's USD per million tokens (from the OpenRouter model list
 cached by agent-prices-refresh), or null if the model has no `openrouter` id.
 Models with a `health` URL are offered only if that URL responds.
 For a claude model, fails if the account's login store is logged in to an org other than the
-account's entry in [claude_orgs], so that a /login to the wrong account does not go unnoticed.
+account's claude_org, so that a /login to the wrong account does not go unnoticed.
 """
 
 import argparse
@@ -38,7 +43,12 @@ PRICES_PATH = Path(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("name", nargs="?")
-    parser.add_argument("-p", "--personal", action="store_true")
+    flags = parser.add_mutually_exclusive_group()
+    flags.add_argument("-p", "--personal", action="store_true")
+    flags.add_argument("-w", "--work", action="store_true")
+    parser.add_argument(
+        "--anywhere", action="store_true", help="-p/-w override the account paths"
+    )
     parser.add_argument("--list", action="store_true", help="print available models")
     args = parser.parse_args()
 
@@ -47,26 +57,70 @@ def main() -> None:
     if args.list:
         print(format_rows(models), end="")
         return
+    accounts = config.get("accounts", {})
+    flag = "personal" if args.personal else "work" if args.work else None
+    account = choose_account(accounts, flag, args.anywhere)
     name = os.environ.get("AGENT_MODEL") or args.name
-    model = find(models, name or fzf(models, args.personal))
-    account = "personal" if args.personal else "default"
-    env = {
-        k: str(Path(v).expanduser())
-        for k, v in config.get("accounts", {}).get(account, {}).items()
-    }
-    if model["cli"] == "claude" and account in config.get("claude_orgs", {}):
-        check_claude_org(account, config["claude_orgs"][account], env)
+    model = find(models, name or fzf(models, account))
+    settings = accounts.get(account, {})
+    env = {k: str(Path(v).expanduser()) for k, v in settings.get("env", {}).items()}
+    if model["cli"] == "claude" and "claude_org" in settings:
+        check_claude_org(account, settings["claude_org"], env)
     print(
         json.dumps(
             {
                 "name": model["name"],
                 "cli": model["cli"],
                 "model": model["model"],
+                "account": account,
                 "env": env,
                 "price": price(model["openrouter"]) if "openrouter" in model else None,
             }
         )
     )
+
+
+def choose_account(accounts: dict[str, Any], flag: str | None, anywhere: bool) -> str:
+    if flag and anywhere:
+        return flag
+    checkout = main_checkout()
+    matched = next(
+        (
+            name
+            for name, settings in accounts.items()
+            for path in settings.get("paths", [])
+            if is_within(checkout, Path(path).expanduser().resolve())
+        ),
+        None,
+    )
+    if flag and matched and flag != matched:
+        sys.exit(
+            f"agent pick: {checkout} is in the {matched} account's paths, not {flag}'s"
+            " (see [accounts] in agent-models.toml)"
+        )
+    account = flag or matched
+    if not account:
+        sys.exit(
+            f"agent pick: {checkout} is in no account's paths; pass -p (personal) or -w"
+            " (work), or add it to [accounts] in agent-models.toml"
+        )
+    return account
+
+
+def main_checkout() -> Path:
+    result = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode != 0:
+        return Path.cwd().resolve()
+    return Path(result.stdout.strip()).resolve().parent
+
+
+def is_within(path: Path, dir: Path) -> bool:
+    return path == dir or dir in path.parents
 
 
 def check_claude_org(account: str, expected: str, env: dict[str, str]) -> None:
@@ -123,13 +177,13 @@ def price(openrouter_id: str) -> dict[str, float]:
     sys.exit(f"agent pick: {openrouter_id} not in {PRICES_PATH}")
 
 
-def fzf(models: list[dict[str, Any]], personal: bool) -> str:
+def fzf(models: list[dict[str, Any]], account: str) -> str:
     result = subprocess.run(
         [
             "fzf",
             "--height=~40%",
             "--reverse",
-            f"--header=account: {'personal' if personal else 'default'}",
+            f"--header=account: {account}",
         ],
         input=format_rows(models),
         check=False,

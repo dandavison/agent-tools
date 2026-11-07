@@ -4,12 +4,18 @@
 # `agent prices-refresh`. `agent run` uses them for codex (claude reports its own cost).
 # Long-context price tiers are ignored.
 
-# The org each account's claude login store must be logged in to; agent pick checks it.
-[claude_orgs]
-default = "bc1248c3-30a9-4048-854d-46d5a7a66f07"  # Temporal Technologies
-personal = "4f25dbb8-e6b5-4584-8a45-accc09442150"  # dandavison7@gmail.com
+# Accounts. agent pick chooses the one whose paths contain the repo's main checkout; elsewhere
+# -p (personal) or -w (work) is required. claude_org is the org the account's claude login
+# store must be logged in to. env is exported for the account's sessions.
+[accounts.work]
+paths = ["~/src/temporalio", "~/src/temporalio-etc"]
+claude_org = "bc1248c3-30a9-4048-854d-46d5a7a66f07"  # Temporal Technologies
 
 [accounts.personal]
+paths = ["~/src/gitu", "~/src/delta"]
+claude_org = "4f25dbb8-e6b5-4584-8a45-accc09442150"  # dandavison7@gmail.com
+
+[accounts.personal.env]
 CLAUDE_CONFIG_DIR = "~/.claude-personal"
 # Claude Code's login profile store (default ~/.config/anthropic) overrides CLAUDE_CONFIG_DIR's login.
 ANTHROPIC_CONFIG_DIR = "~/.config/anthropic-personal"

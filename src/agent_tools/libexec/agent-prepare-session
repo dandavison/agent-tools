@@ -1,4 +1,4 @@
-#!/usr/bin/env -S agent run -m opus
+#!/usr/bin/env -S agent run -w -m opus
 You prepare a context recipe for a new agent session, which we call B. Dan describes B: its
 purpose, what it should know, and what it must not see. You choose B's sources, check them,
 and save a recipe that `agent ctx` builds deterministically. You never start B, and never run

@@ -19,23 +19,23 @@ SCRIPTS = {
     "with-input": """Start an interactive agent with its input pre-filled from stdin.
 
     \b
-    agent with-input [-p|--personal] [-m MODEL] [--name NAME] [-- AGENT [ARG...]] < FILE
+    agent with-input [-p|--personal|-w|--work] [-m MODEL] [--name NAME] [-- AGENT [ARG...]] < FILE
     Requires tmux. Nothing is submitted.""",
     "from-issues": """Start an interactive agent with GitHub issues pre-filled in its input.
 
     \b
-    agent from-issues [-R OWNER/REPO] [-p|--personal] [-m MODEL] ISSUE... [-- AGENT [ARG...]]
+    agent from-issues [-R OWNER/REPO] [-p|--personal|-w|--work] [-m MODEL] ISSUE... [-- AGENT [ARG...]]
     ISSUE is a number or URL. Reads ~/.config/agent-from-issues.toml.""",
     "run": """Run a prompt non-interactively; the answer goes to stdout.
 
     \b
-    agent run [-p|--personal] [-m MODEL] [--no-tools]                prompt from stdin
-    agent run [-p|--personal] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script
+    agent run [-p|-w] [-m MODEL] [--no-tools]                prompt from stdin
+    agent run [-p|-w] [-m MODEL] [--no-tools] FILE [ARG...]  prompt script
     agent run --print-prompt FILE [ARG...]                           print its prompt instead""",
     "pick": """Choose a model ($AGENT_MODEL, else NAME, else fzf) and print it as JSON.
 
     \b
-    agent pick [-p|--personal] [--list] [NAME]""",
+    agent pick [-p|-w] [--anywhere] [--list] [NAME]""",
     "prices-refresh": "Cache OpenRouter's model list, used for codex costs.",
     "prepare-session": """Prepare a context recipe for a new session described in plain language.
 
@@ -47,8 +47,8 @@ SCRIPTS = {
     "new": """Prepare a session from a description, then start it on Enter.
 
     \b
-    agent new [-p|--personal] [-m MODEL] "DESCRIPTION OF THE SESSION"
-    agent new [-p|--personal] [-m MODEL] RECIPE.toml
+    agent new [-p|--personal|-w|--work] [-m MODEL] "DESCRIPTION OF THE SESSION"
+    agent new [-p|--personal|-w|--work] [-m MODEL] RECIPE.toml
     Runs prepare-session and shows its report. Enter starts the session with the
     recipe's context; typed changes revise the recipe first. Requires tmux.""",
     "exfiltrate": """Get the sessions that discussed a topic to write what they know into log issues.
@@ -118,18 +118,24 @@ class Agent(click.Group):
     shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
 )
 @click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
+@click.option("-w", "--work", is_flag=True, help="Use the work account.")
 @click.pass_context
-def cli(ctx: click.Context, model: str | None, personal: bool) -> None:
+def cli(ctx: click.Context, model: str | None, personal: bool, work: bool) -> None:
     """Start agent sessions and run prompts on a chosen model.
 
     With no subcommand, start an interactive session, passing other options to the
     model's CLI (e.g. `agent -r`). The model is $AGENT_MODEL if set, else -m MODEL, else
-    chosen with fzf.
+    chosen with fzf. The account is chosen by the repo's directory (see [accounts] in
+    agent-models.toml); -p/-w must agree with it, and are required where it has no account.
     """
     if ctx.invoked_subcommand is None:
-        start_session(model, personal, [])
-    elif (model or personal) and ctx.invoked_subcommand not in TAKES_MODEL_OPTIONS:
-        raise click.UsageError(f"-m and -p do not apply to {ctx.invoked_subcommand}")
+        start_session(model, account_flag(personal, work), [])
+    elif (
+        model or personal or work
+    ) and ctx.invoked_subcommand not in TAKES_MODEL_OPTIONS:
+        raise click.UsageError(
+            f"-m, -p and -w do not apply to {ctx.invoked_subcommand}"
+        )
 
 
 @cli.command(
@@ -142,15 +148,17 @@ def cli(ctx: click.Context, model: str | None, personal: bool) -> None:
     shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
 )
 @click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
+@click.option("-w", "--work", is_flag=True, help="Use the work account.")
 @click.pass_context
-def start(ctx: click.Context, model: str | None, personal: bool) -> None:
+def start(ctx: click.Context, model: str | None, personal: bool, work: bool) -> None:
     """Start an interactive session, passing other arguments to the model's CLI.
 
     \b
     agent start -m opus --resume abc
     """
     agent = ctx.find_root().params
-    start_session(model or agent["model"], personal or agent["personal"], ctx.args)
+    flag = account_flag(personal or agent["personal"], work or agent["work"])
+    start_session(model or agent["model"], flag, ctx.args)
 
 
 @cli.command("ctx")
@@ -245,7 +253,13 @@ def quiz_command(recipe: Path, model: str | None, personal: bool) -> None:
     try:
         agent = click.get_current_context().find_root().params
         model, personal = model or agent["model"], personal or agent["personal"]
-        quiz(recipe.absolute(), lambda other: pick_model(model, personal or other))
+        # The forked session must use the existing session's account, wherever the recipe is.
+        quiz(
+            recipe.absolute(),
+            lambda other: pick_model(
+                model, "personal" if personal or other else "work", anywhere=True
+            ),
+        )
     except SourceError as e:
         raise click.ClickException(str(e)) from e
 
@@ -258,6 +272,7 @@ def script_command(name: str, help: str) -> click.Command:
         agent = ctx.find_root().params
         options = [
             *(["--personal"] if agent["personal"] else []),
+            *(["--work"] if agent["work"] else []),
             *(["-m", agent["model"]] if agent["model"] else []),
         ]
         os.execvp(f"agent-{name}", [f"agent-{name}", *options, *ctx.args])
@@ -272,16 +287,23 @@ for name, help in SCRIPTS.items():
     cli.add_command(script_command(name, help))
 
 
-def start_session(model: str | None, personal: bool, args: list[str]) -> None:
-    pick = pick_model(model, personal)
+def account_flag(personal: bool, work: bool) -> str | None:
+    if personal and work:
+        raise click.UsageError("-p and -w are mutually exclusive")
+    return "personal" if personal else "work" if work else None
+
+
+def start_session(model: str | None, account: str | None, args: list[str]) -> None:
+    pick = pick_model(model, account)
     os.environ.update(pick["env"])
     os.execvp(pick["cli"], [pick["cli"], "--model", pick["model"], *args])
 
 
-def pick_model(model: str | None, personal: bool) -> dict:
+def pick_model(model: str | None, account: str | None, anywhere: bool = False) -> dict:
     argv = [
         "agent-pick",
-        *(["--personal"] if personal else []),
+        *([f"--{account}"] if account else []),
+        *(["--anywhere"] if anywhere else []),
         *([model] if model else []),
     ]
     result = subprocess.run(argv, check=False, stdout=subprocess.PIPE, text=True)
