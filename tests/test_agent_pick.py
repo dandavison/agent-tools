@@ -165,3 +165,64 @@ def test_ctrl_c_in_fzf_exits_without_traceback(config: Path) -> None:
     )
     assert result.returncode == 130
     assert "Traceback" not in result.stderr
+
+
+WORK_ORG = "11111111-1111-1111-1111-111111111111"
+PERSONAL_ORG = "22222222-2222-2222-2222-222222222222"
+
+
+@pytest.fixture
+def home(config: Path) -> Path:
+    config.write_text(
+        f'[claude_orgs]\ndefault = "{WORK_ORG}"\npersonal = "{PERSONAL_ORG}"\n\n'
+        + CONFIG
+    )
+    (config.parent / ".claude-personal").mkdir()
+    return config.parent
+
+
+def log_in(store: Path, org: str) -> None:
+    store.write_text(json.dumps({"oauthAccount": {"organizationUuid": org}}))
+
+
+@pytest.mark.parametrize(
+    ("personal", "store", "org"),
+    [
+        ([], ".claude.json", WORK_ORG),
+        (["-p"], ".claude-personal/.claude.json", PERSONAL_ORG),
+    ],
+)
+def test_claude_store_logged_in_to_its_org_is_picked(
+    home: Path, personal: list[str], store: str, org: str
+) -> None:
+    log_in(home / store, org)
+    result = run(home / "agent-models.toml", *personal, "opus", env={"HOME": str(home)})
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("personal", "store", "org"),
+    [
+        ([], ".claude.json", PERSONAL_ORG),
+        (["-p"], ".claude-personal/.claude.json", WORK_ORG),
+    ],
+)
+def test_claude_store_logged_in_to_other_org_fails(
+    home: Path, personal: list[str], store: str, org: str
+) -> None:
+    log_in(home / store, org)
+    result = run(home / "agent-models.toml", *personal, "opus", env={"HOME": str(home)})
+    assert result.returncode != 0
+    assert org in result.stderr
+    assert "/login" in result.stderr
+
+
+def test_claude_store_not_logged_in_is_picked(home: Path) -> None:
+    result = run(home / "agent-models.toml", "opus", env={"HOME": str(home)})
+    assert result.returncode == 0, result.stderr
+
+
+def test_codex_ignores_claude_store_org(home: Path) -> None:
+    log_in(home / ".claude.json", PERSONAL_ORG)
+    result = run(home / "agent-models.toml", "luna", env={"HOME": str(home)})
+    assert result.returncode == 0, result.stderr
