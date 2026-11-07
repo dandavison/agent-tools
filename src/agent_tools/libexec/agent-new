@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# agent new [-p|--personal|-w|--work] [-m MODEL] "DESCRIPTION OF THE SESSION"
-# agent new [-p|--personal|-w|--work] [-m MODEL] RECIPE.toml
+# agent new [-p|--personal|-w|--work] [-m MODEL] [-e EFFORT] "DESCRIPTION OF THE SESSION"
+# agent new [-p|--personal|-w|--work] [-m MODEL] [-e EFFORT] RECIPE.toml
 #
 # Prepare a recipe for a session described in plain language (agent-prepare-session) and
 # show its report. Enter then starts the session with the recipe's context (agent-with-input);
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-usage='Usage: agent new [-p|--personal|-w|--work] [-m MODEL] "DESCRIPTION" | RECIPE.toml'
+usage='Usage: agent new [-p|--personal|-w|--work] [-m MODEL] [-e EFFORT] "DESCRIPTION" | RECIPE.toml'
 log=~/src/temporalio-etc/log
 with_input_args=()
 while [[ $# -gt 0 ]]; do
@@ -22,6 +22,9 @@ while [[ $# -gt 0 ]]; do
         shift
     elif [[ "$1" == "-m" && $# -ge 2 ]]; then
         with_input_args+=(-m "$2")
+        shift 2
+    elif [[ "$1" == "-e" && $# -ge 2 ]]; then
+        with_input_args+=(-e "$2")
         shift 2
     else
         break

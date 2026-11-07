@@ -117,24 +117,36 @@ class Agent(click.Group):
     help="Model name from ~/.config/agent-models.toml.",
     shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
 )
+@click.option(
+    "-e",
+    "effort",
+    help="Effort, from the model's efforts in ~/.config/agent-models.toml.",
+)
 @click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
 @click.option("-w", "--work", is_flag=True, help="Use the work account.")
 @click.pass_context
-def cli(ctx: click.Context, model: str | None, personal: bool, work: bool) -> None:
+def cli(
+    ctx: click.Context,
+    model: str | None,
+    effort: str | None,
+    personal: bool,
+    work: bool,
+) -> None:
     """Start agent sessions and run prompts on a chosen model.
 
     With no subcommand, start an interactive session, passing other options to the
     model's CLI (e.g. `agent -r`). The model is $AGENT_MODEL if set, else -m MODEL, else
-    chosen with fzf. The account is chosen by the repo's directory (see [accounts] in
+    chosen with fzf; then the effort is $AGENT_EFFORT if set, else -e EFFORT, else chosen
+    with fzf, for a model with efforts. The account is chosen by the repo's directory (see [accounts] in
     agent-models.toml); -p/-w must agree with it, and are required where it has no account.
     """
     if ctx.invoked_subcommand is None:
-        start_session(model, account_flag(personal, work), [])
+        start_session(model, effort, account_flag(personal, work), [])
     elif (
-        model or personal or work
+        model or effort or personal or work
     ) and ctx.invoked_subcommand not in TAKES_MODEL_OPTIONS:
         raise click.UsageError(
-            f"-m, -p and -w do not apply to {ctx.invoked_subcommand}"
+            f"-m, -e, -p and -w do not apply to {ctx.invoked_subcommand}"
         )
 
 
@@ -147,10 +159,21 @@ def cli(ctx: click.Context, model: str | None, personal: bool, work: bool) -> No
     help="Model name from ~/.config/agent-models.toml.",
     shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
 )
+@click.option(
+    "-e",
+    "effort",
+    help="Effort, from the model's efforts in ~/.config/agent-models.toml.",
+)
 @click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
 @click.option("-w", "--work", is_flag=True, help="Use the work account.")
 @click.pass_context
-def start(ctx: click.Context, model: str | None, personal: bool, work: bool) -> None:
+def start(
+    ctx: click.Context,
+    model: str | None,
+    effort: str | None,
+    personal: bool,
+    work: bool,
+) -> None:
     """Start an interactive session, passing other arguments to the model's CLI.
 
     \b
@@ -158,7 +181,7 @@ def start(ctx: click.Context, model: str | None, personal: bool, work: bool) -> 
     """
     agent = ctx.find_root().params
     flag = account_flag(personal or agent["personal"], work or agent["work"])
-    start_session(model or agent["model"], flag, ctx.args)
+    start_session(model or agent["model"], effort or agent["effort"], flag, ctx.args)
 
 
 @cli.command("ctx")
@@ -240,8 +263,15 @@ def overview_command(recipe: Path, model: str) -> None:
     help="Model for both sessions, from ~/.config/agent-models.toml.",
     shell_complete=lambda ctx, param, incomplete: model_names(incomplete),
 )
+@click.option(
+    "-e",
+    "effort",
+    help="Effort, from the model's efforts in ~/.config/agent-models.toml.",
+)
 @click.option("-p", "--personal", is_flag=True, help="Use the personal account.")
-def quiz_command(recipe: Path, model: str | None, personal: bool) -> None:
+def quiz_command(
+    recipe: Path, model: str | None, effort: str | None, personal: bool
+) -> None:
     """Ask a session prepared from RECIPE.toml and an existing session the same
     questions, and show their answers one after the other.
 
@@ -253,13 +283,17 @@ def quiz_command(recipe: Path, model: str | None, personal: bool) -> None:
     try:
         agent = click.get_current_context().find_root().params
         model, personal = model or agent["model"], personal or agent["personal"]
-        # The forked session must use the existing session's account, wherever the recipe is.
-        quiz(
-            recipe.absolute(),
-            lambda other: pick_model(
-                model, "personal" if personal or other else "work", anywhere=True
-            ),
-        )
+        chosen = {"effort": effort or agent["effort"]}
+
+        def pick(other: bool) -> dict:
+            # The forked session must use the existing session's account, wherever the
+            # recipe is; both sessions use the effort chosen for the first.
+            account = "personal" if personal or other else "work"
+            pick = pick_model(model, chosen["effort"], account, anywhere=True)
+            chosen["effort"] = pick["effort"]
+            return pick
+
+        quiz(recipe.absolute(), pick)
     except SourceError as e:
         raise click.ClickException(str(e)) from e
 
@@ -274,13 +308,14 @@ def script_command(name: str, help: str) -> click.Command:
             *(["--personal"] if agent["personal"] else []),
             *(["--work"] if agent["work"] else []),
             *(["-m", agent["model"]] if agent["model"] else []),
+            *(["-e", agent["effort"]] if agent["effort"] else []),
         ]
         os.execvp(f"agent-{name}", [f"agent-{name}", *options, *ctx.args])
 
     return Script(name, callback=click.pass_context(run), help=help)
 
 
-# Subcommands that accept agent's own -m and -p.
+# Subcommands that accept agent's own -m, -e, -p and -w.
 TAKES_MODEL_OPTIONS = {"start", "quiz", "with-input", "from-issues", "run", "new"}
 
 for name, help in SCRIPTS.items():
@@ -293,15 +328,23 @@ def account_flag(personal: bool, work: bool) -> str | None:
     return "personal" if personal else "work" if work else None
 
 
-def start_session(model: str | None, account: str | None, args: list[str]) -> None:
-    pick = pick_model(model, account)
+def start_session(
+    model: str | None, effort: str | None, account: str | None, args: list[str]
+) -> None:
+    pick = pick_model(model, effort, account)
     os.environ.update(pick["env"])
-    os.execvp(pick["cli"], [pick["cli"], "--model", pick["model"], *args])
+    os.execvp(pick["cli"], [pick["cli"], *pick["args"], *args])
 
 
-def pick_model(model: str | None, account: str | None, anywhere: bool = False) -> dict:
+def pick_model(
+    model: str | None,
+    effort: str | None,
+    account: str | None,
+    anywhere: bool = False,
+) -> dict:
     argv = [
         "agent-pick",
+        *(["-e", effort] if effort else []),
         *([f"--{account}"] if account else []),
         *(["--anywhere"] if anywhere else []),
         *([model] if model else []),

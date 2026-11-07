@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# agent from-issues [-R owner/repo] [-p|--personal|-w|--work] [-m MODEL] <issue-number-or-url>... [-- <agent> [<arg>...]]
+# agent from-issues [-R owner/repo] [-p|--personal|-w|--work] [-m MODEL] [-e EFFORT] <issue-number-or-url>... [-- <agent> [<arg>...]]
 #
 # Start an interactive agent session via agent-with-input, which chooses the
 # model, with the input buffer pre-seeded with the content of the given GitHub
@@ -53,6 +53,13 @@ while [[ $# -gt 0 ]]; do
         fi
         with_input_args+=(-m "$2")
         shift 2
+    elif [[ "$1" == "-e" ]]; then
+        if [[ $# -lt 2 ]]; then
+            echo "Error: -e requires an argument" >&2
+            exit 1
+        fi
+        with_input_args+=(-e "$2")
+        shift 2
     elif [[ "$1" == "--" ]]; then
         with_input_args+=("$@")
         break
@@ -63,7 +70,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#issues[@]} -eq 0 ]]; then
-    echo "Usage: agent from-issues [-R owner/repo] [-p|--personal|-w|--work] [-m MODEL] <issue-number-or-url>... [-- <agent> [<arg>...]]" >&2
+    echo "Usage: agent from-issues [-R owner/repo] [-p|--personal|-w|--work] [-m MODEL] [-e EFFORT] <issue-number-or-url>... [-- <agent> [<arg>...]]" >&2
     exit 1
 fi
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# agent with-input [-p|--personal|-w|--work] [-m MODEL] [--name NAME] [-- <agent> [<arg>...]]
+# agent with-input [-p|--personal|-w|--work] [-m MODEL] [-e EFFORT] [--name NAME] [-- <agent> [<arg>...]]
 #
 # Start an interactive agent session (model chosen via agent-pick, unless an
 # explicit agent command follows "--") with the input buffer
@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-usage="Usage: agent with-input [-p|--personal|-w|--work] [-m MODEL] [--name NAME] [-- <agent> [<arg>...]]"
+usage="Usage: agent with-input [-p|--personal|-w|--work] [-m MODEL] [-e EFFORT] [--name NAME] [-- <agent> [<arg>...]]"
 pick_args=()
 agent=()
 name=""
@@ -26,6 +26,9 @@ while [[ $# -gt 0 ]]; do
         shift
     elif [[ "$1" == "-m" && $# -ge 2 ]]; then
         pick_args+=("$2")
+        shift 2
+    elif [[ "$1" == "-e" && $# -ge 2 ]]; then
+        pick_args+=(-e "$2")
         shift 2
     elif [[ "$1" == "--name" && $# -ge 2 ]]; then
         name="$2"
@@ -54,7 +57,8 @@ fi
 if [[ ${#agent[@]} -eq 0 ]]; then
     pick="$(agent-pick ${pick_args[@]+"${pick_args[@]}"})"
     while IFS= read -r kv; do export "$kv"; done < <(jq -r '.env | to_entries[] | "\(.key)=\(.value)"' <<<"$pick")
-    agent=("$(jq -r .cli <<<"$pick")" --model "$(jq -r .model <<<"$pick")")
+    agent=("$(jq -r .cli <<<"$pick")")
+    while IFS= read -r arg; do agent+=("$arg"); done < <(jq -r '.args[]' <<<"$pick")
 fi
 
 if [[ -n "$name" ]]; then

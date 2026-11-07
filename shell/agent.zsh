@@ -29,13 +29,14 @@ agent-accept-line() {
 agent-suggest-command-widget() {
     local text=${1:-$BUFFER}
     [[ -n $text ]] || return
-    local model=$(agent pick -w --anywhere | jq -r .name)  # suggest-command runs on -w
+    local pick=$(agent pick -w --anywhere)  # suggest-command runs on -w
     zle reset-prompt
+    local model=$(jq -r '.name // empty' <<<$pick) effort=$(jq -r '.effort // empty' <<<$pick)
     [[ -n $model ]] || return
-    zle -M "asking $model..."
+    zle -M "asking $model${effort:+ ($effort)}..."
     zle -R
     local cmd err=$(mktemp)
-    if cmd=$(print -r -- "$text" | AGENT_MODEL=$model agent suggest-command 2>$err); then
+    if cmd=$(print -r -- "$text" | AGENT_MODEL=$model AGENT_EFFORT=$effort agent suggest-command 2>$err); then
         agent-record-history "$text"
         BUFFER=$cmd
         CURSOR=$#BUFFER

@@ -43,8 +43,12 @@ class Session:
         # A resumed session reports its running total, not what this turn cost.
         total = float(summary.get("total_cost_usd") or 0)
         cost, self.spent = total - self.spent, total
-        model = self.args[self.args.index("--model") + 1]
-        self.args = ["--model", model, "--resume", summary["session_id"]]
+        model_args = (
+            self.args[: self.args.index("--resume")]
+            if "--resume" in self.args
+            else self.args
+        )
+        self.args = [*model_args, "--resume", summary["session_id"]]
         return summary.get("result", ""), cost
 
 
@@ -106,7 +110,7 @@ def describe(id: str) -> dict:
 def start(pick: dict, cwd: str) -> tuple[list[str], str, dict[str, str]]:
     if pick["cli"] != "claude":
         raise SourceError(f"{pick['name']}: quiz supports claude models only")
-    return ["--model", pick["model"]], cwd, {**os.environ, **pick["env"]}
+    return pick["args"], cwd, {**os.environ, **pick["env"]}
 
 
 def forked(session: dict, pick: dict) -> Session:

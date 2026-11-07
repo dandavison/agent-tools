@@ -6,15 +6,17 @@
 # ///
 """Choose a model from ~/.config/agent-models.toml and print it as JSON.
 
-The model is $AGENT_MODEL if set, else NAME, else chosen with fzf.
+The model is $AGENT_MODEL if set, else NAME, else chosen with fzf. Then, for a model with
+`efforts`, the effort is $AGENT_EFFORT if set, else -e EFFORT, else chosen with fzf. It is always
+passed to the CLI, so that a CLI's own saved default (e.g. from claude's /effort) never applies.
 
 The account (work or personal) is the one whose `paths` contain the repo's main checkout
 (the parent of its git common dir, so a worktree counts as its repo), or the current directory
 outside a repo. -p/-w must agree with that, and are required where no account's paths match.
 With --anywhere, -p/-w override the paths, for prompt scripts whose directory is incidental.
 
-Output: {"name", "cli", "model", "account", "env", "price"}, where env holds the account's
-variables, and price is the model's USD per million tokens (from the OpenRouter model list
+Output: {"name", "cli", "model", "account", "effort", "args", "env", "price"}, where args
+are the CLI's arguments for the model and effort, env holds the account's variables, and price is the model's USD per million tokens (from the OpenRouter model list
 cached by agent-prices-refresh), or null if the model has no `openrouter` id.
 Models with a `health` URL are offered only if that URL responds.
 For a claude model, fails if the account's login store is logged in to an org other than the
@@ -49,6 +51,8 @@ def main() -> None:
     parser.add_argument(
         "--anywhere", action="store_true", help="-p/-w override the account paths"
     )
+    parser.add_argument("-e", dest="effort", help="one of the model's efforts")
+    parser.add_argument("--no-fzf", action="store_true", help="fail instead of asking")
     parser.add_argument("--list", action="store_true", help="print available models")
     args = parser.parse_args()
 
@@ -61,7 +65,10 @@ def main() -> None:
     flag = "personal" if args.personal else "work" if args.work else None
     account = choose_account(accounts, flag, args.anywhere)
     name = os.environ.get("AGENT_MODEL") or args.name
-    model = find(models, name or fzf(models, account))
+    model = find(models, name or fzf(format_rows(models), f"account: {account}"))
+    effort = choose_effort(
+        model, os.environ.get("AGENT_EFFORT") or args.effort, args.no_fzf
+    )
     settings = accounts.get(account, {})
     env = {k: str(Path(v).expanduser()) for k, v in settings.get("env", {}).items()}
     if model["cli"] == "claude" and "claude_org" in settings:
@@ -73,11 +80,44 @@ def main() -> None:
                 "cli": model["cli"],
                 "model": model["model"],
                 "account": account,
+                "effort": effort,
+                "args": cli_args(model, effort),
                 "env": env,
                 "price": price(model["openrouter"]) if "openrouter" in model else None,
             }
         )
     )
+
+
+def choose_effort(
+    model: dict[str, Any], effort: str | None, no_fzf: bool
+) -> str | None:
+    efforts = model.get("efforts", [])
+    if not efforts:
+        if effort:
+            sys.exit(f"agent pick: {model['name']} has no efforts")
+        return None
+    if not effort and no_fzf:
+        sys.exit(f"agent pick: no effort for {model['name']}: set AGENT_EFFORT or pass -e")
+    effort = effort or fzf(
+        "".join(f"{e}\n" for e in efforts), f"{model['name']} effort"
+    )
+    if effort not in efforts:
+        sys.exit(
+            f"agent pick: {model['name']} efforts are {', '.join(efforts)}, not {effort}"
+        )
+    return effort
+
+
+def cli_args(model: dict[str, Any], effort: str | None) -> list[str]:
+    args = ["--model", model["model"]]
+    if effort and model["cli"] == "claude":
+        args += ["--effort", effort]
+    elif effort and model["cli"] == "codex":
+        args += ["-c", f"model_reasoning_effort={effort}"]
+    elif effort:
+        sys.exit(f"agent pick: efforts are not supported for {model['cli']}")
+    return args
 
 
 def choose_account(accounts: dict[str, Any], flag: str | None, anywhere: bool) -> str:
@@ -177,15 +217,10 @@ def price(openrouter_id: str) -> dict[str, float]:
     sys.exit(f"agent pick: {openrouter_id} not in {PRICES_PATH}")
 
 
-def fzf(models: list[dict[str, Any]], account: str) -> str:
+def fzf(rows: str, header: str) -> str:
     result = subprocess.run(
-        [
-            "fzf",
-            "--height=~40%",
-            "--reverse",
-            f"--header=account: {account}",
-        ],
-        input=format_rows(models),
+        ["fzf", "--height=~40%", "--reverse", f"--header={header}"],
+        input=rows,
         check=False,
         stdout=subprocess.PIPE,
         text=True,

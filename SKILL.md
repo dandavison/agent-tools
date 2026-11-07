@@ -193,12 +193,14 @@ Usage: agent [OPTIONS] [COMMAND] [ARGS]...
   Start agent sessions and run prompts on a chosen model.
 
   With no subcommand, start an interactive session, passing other options to the model's CLI (e.g.
-  `agent -r`). The model is $AGENT_MODEL if set, else -m MODEL, else chosen with fzf. The account is
-  chosen by the repo's directory (see [accounts] in agent-models.toml); -p/-w must agree with it,
-  and are required where it has no account.
+  `agent -r`). The model is $AGENT_MODEL if set, else -m MODEL, else chosen with fzf; then the
+  effort is $AGENT_EFFORT if set, else -e EFFORT, else chosen with fzf, for a model with efforts.
+  The account is chosen by the repo's directory (see [accounts] in agent-models.toml); -p/-w must
+  agree with it, and are required where it has no account.
 
 Options:
   -m TEXT         Model name from ~/.config/agent-models.toml.
+  -e TEXT         Effort, from the model's efforts in ~/.config/agent-models.toml.
   -p, --personal  Use the personal account.
   -w, --work      Use the work account.
   --help          Show this message and exit.
