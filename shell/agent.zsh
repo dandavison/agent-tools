@@ -29,7 +29,7 @@ agent-accept-line() {
 agent-suggest-command-widget() {
     local text=${1:-$BUFFER}
     [[ -n $text ]] || return
-    local model=$(agent pick | jq -r .name)
+    local model=$(agent pick -w --anywhere | jq -r .name)  # suggest-command runs on -w
     zle reset-prompt
     [[ -n $model ]] || return
     zle -M "asking $model..."
