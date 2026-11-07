@@ -30,8 +30,8 @@ recorded=$(mktemp)
 agent() {
     case $1 in
         # agent pick refuses a directory with no account unless told one; agent-suggest-command uses -w.
-        pick) [[ "$*" = "pick -w --anywhere" ]] && print -r -- '{"name": "luna"}' ;;
-        suggest-command) [[ $AGENT_MODEL = luna ]] && print -r -- "ls *.jpg"; print -u2 -- "--- done ---" ;;
+        pick) [[ "$*" = "pick -w --anywhere" ]] && print -r -- '{"name": "luna", "effort": "low"}' ;;
+        suggest-command) [[ $AGENT_MODEL = luna && $AGENT_EFFORT = low ]] && print -r -- "ls *.jpg"; print -u2 -- "--- done ---" ;;
     esac
 }
 atuin() { [[ "$1 $2" = "history start" ]] && print -r -- $4 >> $recorded && print -r -- id1; true }

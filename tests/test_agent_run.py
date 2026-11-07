@@ -298,7 +298,8 @@ def test_no_effort_without_terminal_fails(home: Path) -> None:
     assert "AGENT_EFFORT" in result.stderr
 
 
-@pytest.mark.parametrize("script", ["exfiltrate", "prepare-session", "suggest-command"])
+# suggest-command gets its model and effort from the Ctrl-X Ctrl-A widget (tests/test-agent-text).
+@pytest.mark.parametrize("script", ["exfiltrate", "prepare-session"])
 def test_prompt_script_declares_its_effort(script: str) -> None:
     shebang = (SCRIPT_PATH.parent / f"agent-{script}").read_text().splitlines()[0]
     assert "-e" in shebang.split()
