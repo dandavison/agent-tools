@@ -129,6 +129,26 @@ def test_personal_sets_account_env(home: Path) -> None:
     assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"
 
 
+@pytest.mark.parametrize("script", ["with-input", "from-issues", "run", "new"])
+@pytest.mark.parametrize("personal", ["--personal", "-p"])
+def test_personal_before_script_goes_to_script(
+    home: Path, script: str, personal: str
+) -> None:
+    result = run(home, personal, "-m", "opus", script, "x")
+    assert result.returncode == 0, result.stderr
+    assert argv(home, f"agent-{script}") == ["--personal", "-m", "opus", "x"]
+
+
+@pytest.mark.parametrize("script", ["prices-refresh", "exfiltrate"])
+@pytest.mark.parametrize("option", [["-p"], ["-m", "opus"]])
+def test_option_before_script_without_it_fails(
+    home: Path, script: str, option: list[str]
+) -> None:
+    result = run(home, *option, script)
+    assert result.returncode != 0
+    assert not (home / "bin" / f"agent-{script}.argv").exists()
+
+
 def test_agent_model_env_overrides_m(home: Path) -> None:
     result = run(home, "-m", "opus", env={"AGENT_MODEL": "luna"})
     assert result.returncode == 0, result.stderr
