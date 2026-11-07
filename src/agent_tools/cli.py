@@ -128,6 +128,8 @@ def cli(ctx: click.Context, model: str | None, personal: bool) -> None:
     """
     if ctx.invoked_subcommand is None:
         start_session(model, personal, [])
+    elif (model or personal) and ctx.invoked_subcommand not in TAKES_MODEL_OPTIONS:
+        raise click.UsageError(f"-m and -p do not apply to {ctx.invoked_subcommand}")
 
 
 @cli.command(
@@ -241,6 +243,8 @@ def quiz_command(recipe: Path, model: str | None, personal: bool) -> None:
     forked, so it is not changed. Each answer shows what its turn cost.
     """
     try:
+        agent = click.get_current_context().find_root().params
+        model, personal = model or agent["model"], personal or agent["personal"]
         quiz(recipe.absolute(), lambda other: pick_model(model, personal or other))
     except SourceError as e:
         raise click.ClickException(str(e)) from e
@@ -251,10 +255,18 @@ cli.add_command(agent_sessions.cli.main, "sessions")
 
 def script_command(name: str, help: str) -> click.Command:
     def run(ctx: click.Context) -> None:
-        os.execvp(f"agent-{name}", [f"agent-{name}", *ctx.args])
+        agent = ctx.find_root().params
+        options = [
+            *(["--personal"] if agent["personal"] else []),
+            *(["-m", agent["model"]] if agent["model"] else []),
+        ]
+        os.execvp(f"agent-{name}", [f"agent-{name}", *options, *ctx.args])
 
     return Script(name, callback=click.pass_context(run), help=help)
 
+
+# Subcommands that accept agent's own -m and -p.
+TAKES_MODEL_OPTIONS = {"start", "quiz", "with-input", "from-issues", "run", "new"}
 
 for name, help in SCRIPTS.items():
     cli.add_command(script_command(name, help))
