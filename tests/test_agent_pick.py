@@ -20,9 +20,12 @@ SCRIPT_PATH = (
 )
 
 CONFIG = """
+[accounts.work]
+paths = ["ROOT/work"]
+
 [accounts.personal]
-CLAUDE_CONFIG_DIR = "~/.claude-personal"
-CODEX_HOME = "/tmp/codex-personal"
+paths = ["ROOT/personal", "ROOT/also-personal"]
+env = { CLAUDE_CONFIG_DIR = "~/.claude-personal", CODEX_HOME = "/tmp/codex-personal" }
 
 [[models]]
 name = "opus"
@@ -61,19 +64,25 @@ OPENROUTER_MODELS = {
 @pytest.fixture
 def config(tmp_path: Path) -> Path:
     path = tmp_path / "agent-models.toml"
-    path.write_text(CONFIG)
+    path.write_text(CONFIG.replace("ROOT", str(tmp_path)))
+    for d in ["work", "personal", "also-personal", "other"]:
+        (tmp_path / d).mkdir()
     (tmp_path / "openrouter-models.json").write_text(json.dumps(OPENROUTER_MODELS))
     return path
 
 
 def run(
-    config: Path, *args: str, env: dict[str, str] | None = None
+    config: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(SCRIPT_PATH), *args],
         capture_output=True,
         check=False,
         text=True,
+        cwd=cwd or config.parent / "work",
         env={
             **{k: v for k, v in os.environ.items() if k != "AGENT_MODEL"},
             "AGENT_MODELS": str(config),
@@ -90,6 +99,7 @@ def test_pick_by_name(config: Path) -> None:
         "name": "luna",
         "cli": "codex",
         "model": "gpt-6-luna",
+        "account": "work",
         "env": {},
         "price": {
             "input": 0.10,
@@ -108,7 +118,7 @@ def test_price_is_null_without_openrouter_id(config: Path) -> None:
 
 @pytest.mark.parametrize("personal", ["--personal", "-p"])
 def test_personal_sets_account_env(config: Path, personal: str) -> None:
-    result = run(config, personal, "opus")
+    result = run(config, personal, "opus", cwd=config.parent / "personal")
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["env"] == {
         "CLAUDE_CONFIG_DIR": str(Path("~/.claude-personal").expanduser()),
@@ -156,6 +166,7 @@ def test_ctrl_c_in_fzf_exits_without_traceback(config: Path) -> None:
         capture_output=True,
         check=False,
         text=True,
+        cwd=config.parent / "work",
         env={
             **{k: v for k, v in os.environ.items() if k != "AGENT_MODEL"},
             "PATH": f"{config.parent}:{os.environ['PATH']}",
@@ -174,8 +185,12 @@ PERSONAL_ORG = "22222222-2222-2222-2222-222222222222"
 @pytest.fixture
 def home(config: Path) -> Path:
     config.write_text(
-        f'[claude_orgs]\ndefault = "{WORK_ORG}"\npersonal = "{PERSONAL_ORG}"\n\n'
-        + CONFIG
+        config.read_text()
+        .replace("[accounts.work]\n", f'[accounts.work]\nclaude_org = "{WORK_ORG}"\n')
+        .replace(
+            "[accounts.personal]\n",
+            f'[accounts.personal]\nclaude_org = "{PERSONAL_ORG}"\n',
+        )
     )
     (config.parent / ".claude-personal").mkdir()
     return config.parent
@@ -189,7 +204,7 @@ def log_in(store: Path, org: str) -> None:
     ("personal", "store", "org"),
     [
         ([], ".claude.json", WORK_ORG),
-        (["-p"], ".claude-personal/.claude.json", PERSONAL_ORG),
+        (["-p", "--anywhere"], ".claude-personal/.claude.json", PERSONAL_ORG),
     ],
 )
 def test_claude_store_logged_in_to_its_org_is_picked(
@@ -204,7 +219,7 @@ def test_claude_store_logged_in_to_its_org_is_picked(
     ("personal", "store", "org"),
     [
         ([], ".claude.json", PERSONAL_ORG),
-        (["-p"], ".claude-personal/.claude.json", WORK_ORG),
+        (["-p", "--anywhere"], ".claude-personal/.claude.json", WORK_ORG),
     ],
 )
 def test_claude_store_logged_in_to_other_org_fails(
@@ -226,3 +241,84 @@ def test_codex_ignores_claude_store_org(home: Path) -> None:
     log_in(home / ".claude.json", PERSONAL_ORG)
     result = run(home / "agent-models.toml", "luna", env={"HOME": str(home)})
     assert result.returncode == 0, result.stderr
+
+
+def git(cwd: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+@pytest.mark.parametrize(
+    ("dir", "account"),
+    [
+        ("work", "work"),
+        ("work/sub/dir", "work"),
+        ("personal", "personal"),
+        ("also-personal/x", "personal"),
+    ],
+)
+def test_account_is_chosen_by_path(config: Path, dir: str, account: str) -> None:
+    cwd = config.parent / dir
+    cwd.mkdir(parents=True, exist_ok=True)
+    result = run(config, "opus", cwd=cwd)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["account"] == account
+
+
+def test_worktree_account_is_its_main_checkouts(config: Path) -> None:
+    repo = config.parent / "personal" / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "x")
+    worktree = config.parent / "other" / "task"
+    git(repo, "worktree", "add", "-q", str(worktree))
+    result = run(config, "opus", cwd=worktree)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["account"] == "personal"
+
+
+def test_unmatched_path_without_account_flag_fails(config: Path) -> None:
+    result = run(config, "opus", cwd=config.parent / "other")
+    assert result.returncode != 0
+    assert "-p" in result.stderr and "-w" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("flag", "account"),
+    [
+        ("-p", "personal"),
+        ("--personal", "personal"),
+        ("-w", "work"),
+        ("--work", "work"),
+    ],
+)
+def test_account_flag_chooses_account_for_unmatched_path(
+    config: Path, flag: str, account: str
+) -> None:
+    result = run(config, flag, "opus", cwd=config.parent / "other")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["account"] == account
+
+
+@pytest.mark.parametrize(("flag", "dir"), [("-p", "work"), ("-w", "personal")])
+def test_account_flag_contradicting_path_fails(
+    config: Path, flag: str, dir: str
+) -> None:
+    result = run(config, flag, "opus", cwd=config.parent / dir)
+    assert result.returncode != 0
+    assert str(config.parent / dir) in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("flag", "dir", "account"), [("-p", "work", "personal"), ("-w", "personal", "work")]
+)
+def test_anywhere_lets_account_flag_override_path(
+    config: Path, flag: str, dir: str, account: str
+) -> None:
+    result = run(config, flag, "--anywhere", "opus", cwd=config.parent / dir)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["account"] == account
+
+
+def test_both_account_flags_fail(config: Path) -> None:
+    result = run(config, "-p", "-w", "opus", cwd=config.parent / "other")
+    assert result.returncode != 0

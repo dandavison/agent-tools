@@ -19,8 +19,12 @@ REPO = Path(__file__).parent.parent
 SCRIPT_PATH = REPO / "src" / "agent_tools" / "libexec" / "agent-run"
 
 CONFIG = """
+[accounts.work]
+paths = ["ROOT/work"]
+
 [accounts.personal]
-CLAUDE_CONFIG_DIR = "/tmp/claude-personal"
+paths = ["ROOT/personal"]
+env = { CLAUDE_CONFIG_DIR = "/tmp/claude-personal" }
 
 [[models]]
 name = "opus"
@@ -86,7 +90,9 @@ def fake_cli(path: Path, events: list[dict]) -> None:
 
 @pytest.fixture
 def home(tmp_path: Path) -> Path:
-    (tmp_path / "agent-models.toml").write_text(CONFIG)
+    (tmp_path / "agent-models.toml").write_text(CONFIG.replace("ROOT", str(tmp_path)))
+    (tmp_path / "work").mkdir()
+    (tmp_path / "personal").mkdir()
     (tmp_path / "openrouter-models.json").write_text(json.dumps(OPENROUTER_MODELS))
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -99,7 +105,11 @@ def home(tmp_path: Path) -> Path:
 
 
 def run(
-    home: Path, *args: str, stdin: str = "", env: dict[str, str] | None = None
+    home: Path,
+    *args: str,
+    stdin: str = "",
+    env: dict[str, str] | None = None,
+    cwd: str = "work",
 ) -> subprocess.CompletedProcess[str]:
     base_env = {k: v for k, v in os.environ.items() if k != "AGENT_MODEL"}
     return subprocess.run(
@@ -108,6 +118,7 @@ def run(
         capture_output=True,
         check=False,
         text=True,
+        cwd=home / cwd,
         env={
             **base_env,
             "PATH": f"{home / 'bin'}:{os.environ['PATH']}",
@@ -208,7 +219,7 @@ def test_codex_answer_on_stdout_cost_on_stderr(home: Path) -> None:
 
 @pytest.mark.parametrize("personal", ["--personal", "-p"])
 def test_personal_sets_account_env(home: Path, personal: str) -> None:
-    result = run(home, personal, "-m", "opus", stdin="hello")
+    result = run(home, personal, "-m", "opus", stdin="hello", cwd="personal")
     assert result.returncode == 0, result.stderr
     assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"
 
@@ -233,3 +244,22 @@ def test_ctrl_c_exits_without_traceback(home: Path) -> None:
     result = run(home, "-m", "opus", stdin="hello")
     assert result.returncode == 130
     assert "Traceback" not in result.stderr
+
+
+def test_account_flag_overrides_path(home: Path) -> None:
+    result = run(home, "-p", "-m", "opus", stdin="hello", cwd="work")
+    assert result.returncode == 0, result.stderr
+    assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"
+
+
+def test_unmatched_path_without_account_flag_fails(home: Path) -> None:
+    (home / "other").mkdir()
+    result = run(home, "-m", "opus", stdin="hello", cwd="other")
+    assert result.returncode != 0
+
+
+@pytest.mark.parametrize("script", ["suggest-command", "exfiltrate", "prepare-session"])
+def test_prompt_script_declares_its_account(script: str) -> None:
+    shebang = (SCRIPT_PATH.parent / f"agent-{script}").read_text().splitlines()[0]
+    assert shebang.startswith("#!/usr/bin/env -S agent run ")
+    assert {"-w", "-p"} & set(shebang.split())

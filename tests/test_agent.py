@@ -18,8 +18,12 @@ PATH_WITHOUT_SCRIPTS = ":".join(
 )
 
 CONFIG = """
+[accounts.work]
+paths = ["ROOT/work"]
+
 [accounts.personal]
-CLAUDE_CONFIG_DIR = "/tmp/claude-personal"
+paths = ["ROOT/personal"]
+env = { CLAUDE_CONFIG_DIR = "/tmp/claude-personal" }
 
 [[models]]
 name = "opus"
@@ -48,7 +52,9 @@ WRAPPED = [
 
 @pytest.fixture
 def home(tmp_path: Path) -> Path:
-    (tmp_path / "agent-models.toml").write_text(CONFIG)
+    (tmp_path / "agent-models.toml").write_text(CONFIG.replace("ROOT", str(tmp_path)))
+    (tmp_path / "work").mkdir()
+    (tmp_path / "personal").mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     libexec = tmp_path / "libexec"
@@ -72,6 +78,7 @@ def run(
     *args: str,
     env: dict[str, str] | None = None,
     fake_scripts: bool = True,
+    cwd: str = "work",
 ) -> subprocess.CompletedProcess[str]:
     base_env = {
         k: v
@@ -84,6 +91,7 @@ def run(
         capture_output=True,
         check=False,
         text=True,
+        cwd=home / cwd,
         stdin=subprocess.DEVNULL,
         env={
             **base_env,
@@ -124,7 +132,7 @@ def test_bare_agent_passes_option_args_with_values(home: Path) -> None:
 
 
 def test_personal_sets_account_env(home: Path) -> None:
-    result = run(home, "start", "--personal", "-m", "opus")
+    result = run(home, "start", "--personal", "-m", "opus", cwd="personal")
     assert result.returncode == 0, result.stderr
     assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"
 
@@ -272,4 +280,28 @@ def test_print_prompt_prints_a_procedure_instead_of_running_it(home: Path) -> No
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("You exfiltrate a topic")
     assert result.stdout.rstrip().endswith("Arguments: batch cancel")
+    assert not (home / "bin" / "claude.argv").exists()
+
+
+@pytest.mark.parametrize("script", ["with-input", "from-issues", "run", "new"])
+@pytest.mark.parametrize("work", ["--work", "-w"])
+def test_work_before_script_goes_to_script(home: Path, script: str, work: str) -> None:
+    result = run(home, work, "-m", "opus", script, "x")
+    assert result.returncode == 0, result.stderr
+    assert argv(home, f"agent-{script}") == ["--work", "-m", "opus", "x"]
+
+
+def test_session_in_unmatched_path_fails(home: Path) -> None:
+    (home / "other").mkdir()
+    result = run(home, "-m", "opus", cwd="other")
+    assert result.returncode != 0
+    assert not (home / "bin" / "claude.argv").exists()
+
+
+@pytest.mark.parametrize(("flag", "cwd"), [("-p", "work"), ("-w", "personal")])
+def test_session_account_flag_contradicting_path_fails(
+    home: Path, flag: str, cwd: str
+) -> None:
+    result = run(home, flag, "-m", "opus", cwd=cwd)
+    assert result.returncode != 0
     assert not (home / "bin" / "claude.argv").exists()

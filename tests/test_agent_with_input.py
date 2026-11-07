@@ -18,8 +18,12 @@ REPO = Path(__file__).parent.parent
 SCRIPT_PATH = REPO / "src" / "agent_tools" / "libexec" / "agent-with-input"
 
 CONFIG = """
+[accounts.work]
+paths = ["ROOT/work"]
+
 [accounts.personal]
-CLAUDE_CONFIG_DIR = "/tmp/claude-personal"
+paths = ["ROOT/personal"]
+env = { CLAUDE_CONFIG_DIR = "/tmp/claude-personal" }
 
 [[models]]
 name = "opus"
@@ -43,7 +47,9 @@ esac
 
 @pytest.fixture
 def home(tmp_path: Path) -> Path:
-    (tmp_path / "agent-models.toml").write_text(CONFIG)
+    (tmp_path / "agent-models.toml").write_text(CONFIG.replace("ROOT", str(tmp_path)))
+    (tmp_path / "work").mkdir()
+    (tmp_path / "personal").mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     (bin_dir / "tmux").write_text(f"#!/usr/bin/env bash\n{FAKE_TMUX}")
@@ -62,13 +68,14 @@ def home(tmp_path: Path) -> Path:
 
 
 def run(
-    home: Path, *args: str, env: dict[str, str] | None = None
+    home: Path, *args: str, env: dict[str, str] | None = None, cwd: str = "work"
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(SCRIPT_PATH), *args],
         capture_output=True,
         check=False,
         text=True,
+        cwd=home / cwd,
         input="the input",
         env={
             **{k: v for k, v in os.environ.items() if k != "AGENT_MODEL"},
@@ -93,7 +100,7 @@ def test_m_starts_picked_cli_with_model(home: Path) -> None:
 
 @pytest.mark.parametrize("personal", ["--personal", "-p"])
 def test_personal_sets_account_env(home: Path, personal: str) -> None:
-    result = run(home, personal, "-m", "opus")
+    result = run(home, personal, "-m", "opus", cwd="personal")
     assert result.returncode == 0, result.stderr
     assert argv(home, "claude") == ["--model", "claude-opus-5-5"]
     assert (home / "bin" / "claude.env").read_text().strip() == "/tmp/claude-personal"
