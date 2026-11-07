@@ -7,7 +7,8 @@
 """Choose a model from ~/.config/agent-models.toml and print it as JSON.
 
 The model is $AGENT_MODEL if set, else NAME, else chosen with fzf. Then, for a model with
-`efforts`, the effort is $AGENT_EFFORT if set, else -e EFFORT, else chosen with fzf. It is always
+`efforts`, the effort is $AGENT_EFFORT if set, else -e EFFORT, else chosen with fzf, starting on
+the model's default `effort` (with --no-fzf, the default is used without asking). It is always
 passed to the CLI, so that a CLI's own saved default (e.g. from claude's /effort) never applies.
 
 The account (work or personal) is the one whose `paths` contain the repo's main checkout
@@ -97,10 +98,19 @@ def choose_effort(
         if effort:
             sys.exit(f"agent pick: {model['name']} has no efforts")
         return None
+    default = model.get("effort")
+    if default and default not in efforts:
+        sys.exit(f"agent pick: {model['name']} default effort {default} is not in its efforts")
     if not effort and no_fzf:
-        sys.exit(f"agent pick: no effort for {model['name']}: set AGENT_EFFORT or pass -e")
+        if not default:
+            sys.exit(
+                f"agent pick: no effort for {model['name']}: set AGENT_EFFORT or pass -e"
+            )
+        effort = default
     effort = effort or fzf(
-        "".join(f"{e}\n" for e in efforts), f"{model['name']} effort"
+        "".join(f"{e}\n" for e in efforts),
+        f"{model['name']} effort",
+        efforts.index(default) + 1 if default else 1,
     )
     if effort not in efforts:
         sys.exit(
@@ -217,9 +227,16 @@ def price(openrouter_id: str) -> dict[str, float]:
     sys.exit(f"agent pick: {openrouter_id} not in {PRICES_PATH}")
 
 
-def fzf(rows: str, header: str) -> str:
+def fzf(rows: str, header: str, pos: int = 1) -> str:
     result = subprocess.run(
-        ["fzf", "--height=~40%", "--reverse", f"--header={header}"],
+        [
+            "fzf",
+            "--height=~40%",
+            "--reverse",
+            f"--header={header}",
+            "--bind",
+            f"load:pos({pos})",
+        ],
         input=rows,
         check=False,
         stdout=subprocess.PIPE,
