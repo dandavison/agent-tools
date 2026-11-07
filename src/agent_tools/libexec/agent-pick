@@ -12,6 +12,8 @@ Output: {"name", "cli", "model", "env", "price"}, where env holds the account's 
 --personal, and price is the model's USD per million tokens (from the OpenRouter model list
 cached by agent-prices-refresh), or null if the model has no `openrouter` id.
 Models with a `health` URL are offered only if that URL responds.
+For a claude model, fails if the account's login store is logged in to an org other than the
+account's entry in [claude_orgs], so that a /login to the wrong account does not go unnoticed.
 """
 
 import argparse
@@ -47,18 +49,43 @@ def main() -> None:
         return
     name = os.environ.get("AGENT_MODEL") or args.name
     model = find(models, name or fzf(models, args.personal))
-    env = config["accounts"]["personal"] if args.personal else {}
+    account = "personal" if args.personal else "default"
+    env = {
+        k: str(Path(v).expanduser())
+        for k, v in config.get("accounts", {}).get(account, {}).items()
+    }
+    if model["cli"] == "claude" and account in config.get("claude_orgs", {}):
+        check_claude_org(account, config["claude_orgs"][account], env)
     print(
         json.dumps(
             {
                 "name": model["name"],
                 "cli": model["cli"],
                 "model": model["model"],
-                "env": {k: str(Path(v).expanduser()) for k, v in env.items()},
+                "env": env,
                 "price": price(model["openrouter"]) if "openrouter" in model else None,
             }
         )
     )
+
+
+def check_claude_org(account: str, expected: str, env: dict[str, str]) -> None:
+    config_dir = env.get("CLAUDE_CONFIG_DIR")
+    store = (
+        Path(config_dir) / ".claude.json"
+        if config_dir
+        else Path.home() / ".claude.json"
+    )
+    if not store.exists():
+        return
+    oauth = json.loads(store.read_text()).get("oauthAccount") or {}
+    org = oauth.get("organizationUuid")
+    if org and org != expected:
+        sys.exit(
+            f"agent pick: {store} is logged in to org {org} ({oauth.get('emailAddress')}),"
+            f" but the {account} account's org is {expected}.\n"
+            f"Run /login in: {' '.join([*(f'{k}={v}' for k, v in env.items()), 'claude'])}"
+        )
 
 
 def is_available(model: dict[str, Any]) -> bool:
