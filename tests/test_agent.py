@@ -35,6 +35,7 @@ name = "sonnet"
 cli = "claude"
 model = "claude-sonnet-5-5"
 efforts = ["low", "high", "max"]
+effort = "high"
 
 [[models]]
 name = "terra"
@@ -241,7 +242,12 @@ def test_m_completes_model_names(home: Path, words: str) -> None:
         },
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == ["plain,opus", "plain,luna"]
+    assert result.stdout.splitlines() == [
+        "plain,opus",
+        "plain,sonnet",
+        "plain,terra",
+        "plain,luna",
+    ]
 
 
 @pytest.mark.parametrize(

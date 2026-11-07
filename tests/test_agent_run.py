@@ -36,6 +36,7 @@ name = "sonnet"
 cli = "claude"
 model = "claude-sonnet-5-5"
 efforts = ["low", "high", "max"]
+effort = "high"
 
 [[models]]
 name = "terra"
@@ -292,8 +293,15 @@ def test_effort_goes_to_cli(home: Path, name: str, cli: str, args: list[str]) ->
     assert argv[i : i + len(args)] == args
 
 
-def test_no_effort_without_terminal_fails(home: Path) -> None:
+def test_no_effort_without_terminal_uses_models_default(home: Path) -> None:
     result = run(home, "-m", "sonnet", stdin="hello")
+    assert result.returncode == 0, result.stderr
+    argv = (home / "bin" / "claude.argv").read_text().splitlines()
+    assert argv[argv.index("--effort") + 1] == "high"
+
+
+def test_no_effort_without_terminal_or_default_fails(home: Path) -> None:
+    result = run(home, "-m", "terra", stdin="hello")
     assert result.returncode != 0
     assert "AGENT_EFFORT" in result.stderr
 

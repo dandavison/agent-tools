@@ -37,6 +37,7 @@ name = "sonnet"
 cli = "claude"
 model = "claude-sonnet-5-5"
 efforts = ["low", "high", "max"]
+effort = "high"
 
 [[models]]
 name = "terra"
@@ -382,11 +383,16 @@ def fake_fzf(config: Path, script: str) -> dict[str, str]:
 
 
 def test_effort_is_chosen_with_fzf_after_model(config: Path) -> None:
-    env = fake_fzf(config, f'cat > "{config.parent}/fzf.stdin"; echo high')
+    env = fake_fzf(
+        config,
+        f'cat > "{config.parent}/fzf.stdin"; printf "%s\\n" "$@" > "{config.parent}/fzf.argv"; echo max',
+    )
     result = run(config, "sonnet", env=env)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["effort"] == "high"
+    assert json.loads(result.stdout)["effort"] == "max"
     assert (config.parent / "fzf.stdin").read_text().split() == ["low", "high", "max"]
+    # The cursor starts on the model's default effort, the second row.
+    assert "load:pos(2)" in (config.parent / "fzf.argv").read_text().splitlines()
 
 
 def test_model_without_efforts_is_not_asked_for_one(config: Path) -> None:
@@ -394,3 +400,24 @@ def test_model_without_efforts_is_not_asked_for_one(config: Path) -> None:
     result = run(config, "opus", env=env)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["args"] == ["--model", "claude-opus-5-5"]
+
+
+def test_no_fzf_uses_models_default_effort(config: Path) -> None:
+    result = run(config, "--no-fzf", "sonnet")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["effort"] == "high"
+
+
+def test_no_fzf_without_default_effort_fails(config: Path) -> None:
+    result = run(config, "--no-fzf", "terra")
+    assert result.returncode != 0
+    assert "AGENT_EFFORT" in result.stderr
+
+
+def test_default_effort_not_in_efforts_fails(config: Path) -> None:
+    config.write_text(
+        config.read_text().replace('effort = "high"', 'effort = "medium"')
+    )
+    result = run(config, "-e", "low", "sonnet")
+    assert result.returncode != 0
+    assert "medium" in result.stderr

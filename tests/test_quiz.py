@@ -24,6 +24,7 @@ name = "sonnet"
 cli = "claude"
 model = "claude-sonnet-5-5"
 efforts = ["low", "high", "max"]
+effort = "high"
 
 [[models]]
 name = "terra"
