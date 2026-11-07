@@ -33,6 +33,18 @@ cli = "claude"
 model = "claude-opus-5-5"
 
 [[models]]
+name = "sonnet"
+cli = "claude"
+model = "claude-sonnet-5-5"
+efforts = ["low", "high", "max"]
+
+[[models]]
+name = "terra"
+cli = "codex"
+model = "gpt-6-terra"
+efforts = ["low", "xhigh"]
+
+[[models]]
 name = "luna"
 cli = "codex"
 model = "gpt-6-luna"
@@ -100,6 +112,8 @@ def test_pick_by_name(config: Path) -> None:
         "cli": "codex",
         "model": "gpt-6-luna",
         "account": "work",
+        "effort": None,
+        "args": ["--model", "gpt-6-luna"],
         "env": {},
         "price": {
             "input": 0.10,
@@ -129,7 +143,12 @@ def test_personal_sets_account_env(config: Path, personal: str) -> None:
 def test_list_excludes_unhealthy_local_model(config: Path) -> None:
     result = run(config, "--list")
     assert result.returncode == 0, result.stderr
-    assert [line.split()[0] for line in result.stdout.splitlines()] == ["opus", "luna"]
+    assert [line.split()[0] for line in result.stdout.splitlines()] == [
+        "opus",
+        "sonnet",
+        "terra",
+        "luna",
+    ]
 
 
 def test_unhealthy_local_model_by_name_fails(config: Path) -> None:
@@ -322,3 +341,56 @@ def test_anywhere_lets_account_flag_override_path(
 def test_both_account_flags_fail(config: Path) -> None:
     result = run(config, "-p", "-w", "opus", cwd=config.parent / "other")
     assert result.returncode != 0
+
+
+@pytest.mark.parametrize(
+    ("name", "args"),
+    [
+        ("sonnet", ["--model", "claude-sonnet-5-5", "--effort", "low"]),
+        ("terra", ["--model", "gpt-6-terra", "-c", "model_reasoning_effort=low"]),
+    ],
+)
+def test_effort_goes_into_cli_args(config: Path, name: str, args: list[str]) -> None:
+    result = run(config, "-e", "low", name)
+    assert result.returncode == 0, result.stderr
+    pick = json.loads(result.stdout)
+    assert (pick["effort"], pick["args"]) == ("low", args)
+
+
+def test_effort_not_offered_by_model_fails(config: Path) -> None:
+    result = run(config, "-e", "xhigh", "sonnet")
+    assert result.returncode != 0
+    assert "xhigh" in result.stderr
+
+
+def test_effort_for_model_without_efforts_fails(config: Path) -> None:
+    result = run(config, "-e", "low", "opus")
+    assert result.returncode != 0
+
+
+def test_agent_effort_env_overrides_e(config: Path) -> None:
+    result = run(config, "-e", "low", "sonnet", env={"AGENT_EFFORT": "max"})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["effort"] == "max"
+
+
+def fake_fzf(config: Path, script: str) -> dict[str, str]:
+    fzf = config.parent / "fzf"
+    fzf.write_text(f"#!/usr/bin/env bash\n{script}\n")
+    fzf.chmod(0o755)
+    return {"PATH": f"{config.parent}:{os.environ['PATH']}"}
+
+
+def test_effort_is_chosen_with_fzf_after_model(config: Path) -> None:
+    env = fake_fzf(config, f'cat > "{config.parent}/fzf.stdin"; echo high')
+    result = run(config, "sonnet", env=env)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["effort"] == "high"
+    assert (config.parent / "fzf.stdin").read_text().split() == ["low", "high", "max"]
+
+
+def test_model_without_efforts_is_not_asked_for_one(config: Path) -> None:
+    env = fake_fzf(config, "exit 1")
+    result = run(config, "opus", env=env)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["args"] == ["--model", "claude-opus-5-5"]

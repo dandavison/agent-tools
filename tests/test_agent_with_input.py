@@ -31,6 +31,18 @@ cli = "claude"
 model = "claude-opus-5-5"
 
 [[models]]
+name = "sonnet"
+cli = "claude"
+model = "claude-sonnet-5-5"
+efforts = ["low", "high", "max"]
+
+[[models]]
+name = "terra"
+cli = "codex"
+model = "gpt-6-terra"
+efforts = ["low", "xhigh"]
+
+[[models]]
 name = "luna"
 cli = "codex"
 model = "gpt-6-luna"
@@ -133,3 +145,9 @@ def test_failed_pick_starts_nothing(home: Path) -> None:
     result = run(home, "-m", "nonexistent")
     assert result.returncode != 0
     assert not (home / "bin" / "claude.argv").exists()
+
+
+def test_effort_goes_to_cli(home: Path) -> None:
+    result = run(home, "-m", "sonnet", "-e", "max")
+    assert result.returncode == 0, result.stderr
+    assert argv(home, "claude") == ["--model", "claude-sonnet-5-5", "--effort", "max"]

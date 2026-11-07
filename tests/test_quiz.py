@@ -18,6 +18,18 @@ CONFIG = """
 name = "opus"
 cli = "claude"
 model = "claude-opus-5-5"
+
+[[models]]
+name = "sonnet"
+cli = "claude"
+model = "claude-sonnet-5-5"
+efforts = ["low", "high", "max"]
+
+[[models]]
+name = "terra"
+cli = "codex"
+model = "gpt-6-terra"
+efforts = ["low", "xhigh"]
 """
 
 RECIPE = """
@@ -101,10 +113,13 @@ def home(tmp_path: Path) -> Path:
 
 
 def quiz(
-    home: Path, recipe: str = "recipe.toml", input: str = "what is X?\nwhat is Y?\n\n"
+    home: Path,
+    recipe: str = "recipe.toml",
+    input: str = "what is X?\nwhat is Y?\n\n",
+    model: tuple[str, ...] = ("-m", "opus"),
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(AGENT), "quiz", "-m", "opus", str(home / recipe)],
+        [str(AGENT), "quiz", *model, str(home / recipe)],
         capture_output=True,
         check=False,
         text=True,
@@ -180,3 +195,11 @@ def test_a_recipe_without_related_sessions_says_so(home: Path) -> None:
     assert result.returncode != 0
     assert "related_sessions" in result.stderr
     assert not (home / "claude.calls").exists()
+
+
+def test_every_turn_of_both_sessions_uses_the_effort(home: Path) -> None:
+    result = quiz(home, model=("-m", "sonnet", "-e", "high"))
+    assert result.returncode == 0, result.stderr
+    for call in calls(home):
+        argv = call["argv"]
+        assert argv[argv.index("--effort") + 1] == "high"

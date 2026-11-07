@@ -31,6 +31,18 @@ cli = "claude"
 model = "claude-opus-5-5"
 
 [[models]]
+name = "sonnet"
+cli = "claude"
+model = "claude-sonnet-5-5"
+efforts = ["low", "high", "max"]
+
+[[models]]
+name = "terra"
+cli = "codex"
+model = "gpt-6-terra"
+efforts = ["low", "xhigh"]
+
+[[models]]
 name = "luna"
 cli = "codex"
 model = "gpt-6-luna"
@@ -305,3 +317,22 @@ def test_session_account_flag_contradicting_path_fails(
     result = run(home, flag, "-m", "opus", cwd=cwd)
     assert result.returncode != 0
     assert not (home / "bin" / "claude.argv").exists()
+
+
+def test_effort_goes_to_cli(home: Path) -> None:
+    result = run(home, "-m", "sonnet", "-e", "high", "-r")
+    assert result.returncode == 0, result.stderr
+    assert argv(home, "claude") == [
+        "--model",
+        "claude-sonnet-5-5",
+        "--effort",
+        "high",
+        "-r",
+    ]
+
+
+@pytest.mark.parametrize("script", ["with-input", "from-issues", "run", "new"])
+def test_effort_before_script_goes_to_script(home: Path, script: str) -> None:
+    result = run(home, "-e", "high", script, "x")
+    assert result.returncode == 0, result.stderr
+    assert argv(home, f"agent-{script}") == ["-e", "high", "x"]

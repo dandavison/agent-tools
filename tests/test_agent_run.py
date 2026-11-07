@@ -32,6 +32,18 @@ cli = "claude"
 model = "claude-opus-5-5"
 
 [[models]]
+name = "sonnet"
+cli = "claude"
+model = "claude-sonnet-5-5"
+efforts = ["low", "high", "max"]
+
+[[models]]
+name = "terra"
+cli = "codex"
+model = "gpt-6-terra"
+efforts = ["low", "xhigh"]
+
+[[models]]
 name = "luna"
 cli = "codex"
 model = "gpt-6-luna"
@@ -263,3 +275,30 @@ def test_prompt_script_declares_its_account(script: str) -> None:
     shebang = (SCRIPT_PATH.parent / f"agent-{script}").read_text().splitlines()[0]
     assert shebang.startswith("#!/usr/bin/env -S agent run ")
     assert {"-w", "-p"} & set(shebang.split())
+
+
+@pytest.mark.parametrize(
+    ("name", "cli", "args"),
+    [
+        ("sonnet", "claude", ["--effort", "low"]),
+        ("terra", "codex", ["-c", "model_reasoning_effort=low"]),
+    ],
+)
+def test_effort_goes_to_cli(home: Path, name: str, cli: str, args: list[str]) -> None:
+    result = run(home, "-m", name, "-e", "low", stdin="hello")
+    assert result.returncode == 0, result.stderr
+    argv = (home / "bin" / f"{cli}.argv").read_text().splitlines()
+    i = argv.index(args[0])
+    assert argv[i : i + len(args)] == args
+
+
+def test_no_effort_without_terminal_fails(home: Path) -> None:
+    result = run(home, "-m", "sonnet", stdin="hello")
+    assert result.returncode != 0
+    assert "AGENT_EFFORT" in result.stderr
+
+
+@pytest.mark.parametrize("script", ["exfiltrate", "prepare-session", "suggest-command"])
+def test_prompt_script_declares_its_effort(script: str) -> None:
+    shebang = (SCRIPT_PATH.parent / f"agent-{script}").read_text().splitlines()[0]
+    assert "-e" in shebang.split()
