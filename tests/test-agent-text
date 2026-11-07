@@ -29,7 +29,8 @@ BUFFER=""
 recorded=$(mktemp)
 agent() {
     case $1 in
-        pick) print -r -- '{"name": "luna"}' ;;
+        # agent pick refuses a directory with no account unless told one; agent-suggest-command uses -w.
+        pick) [[ "$*" = "pick -w --anywhere" ]] && print -r -- '{"name": "luna"}' ;;
         suggest-command) [[ $AGENT_MODEL = luna ]] && print -r -- "ls *.jpg"; print -u2 -- "--- done ---" ;;
     esac
 }
