@@ -4,7 +4,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["pytest"]
 # ///
-"""Tests for agent-from-issues, using fake gh-issue-to-md and agent-with-input executables."""
+"""Tests for agent-from-issues, using fake gh-issue-fetch and agent-with-input executables."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def home(tmp_path: Path) -> Path:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     for name, body in [
-        ("gh-issue-to-md", 'echo "content of $1"'),
+        ("gh-issue-fetch", 'echo "content of $1"'),
         (
             "agent-with-input",
             f'cat > {tmp_path}/prompt; printf "%s\\n" "$@" > {tmp_path}/agent',

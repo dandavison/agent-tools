@@ -4,7 +4,7 @@ A context is what `agent with-input` pasted, which Claude records whole, inside
 `<pasted_content>`. It starts `# Context`, then, if a recipe built it,
 `Recipe: <path> @ <commit>`, and lists its sources in a manifest table.
 
-An issue as `gh-issue-to-md` writes it starts with YAML front matter giving its
+An issue as `gh-issue-fetch` writes it starts with YAML front matter giving its
 number and, since 2026-10-22, its url; without one it is an issue of the log repo.
 """
 

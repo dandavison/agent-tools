@@ -19,7 +19,7 @@ give the topic, and may name sessions, and may name a target issue.
      description of the topic as its body, and use that one.
    - With a target issue: that issue only, whatever the sessions posted to before. If Dan asked
      for a new issue, open it.
-3. Fetch each issue in full with `gh-issue-to-md N`.
+3. Fetch each issue in full with `gh-issue-fetch N`.
 4. Ask each session, one at a time, whether it knows anything valuable on the topic that the
    issues do not already contain, and if so to post it as a new comment on the right issue.
    Give it the issues' content inline in the prompt, not as file references, so that it reads

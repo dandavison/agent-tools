@@ -60,7 +60,7 @@ def test_a_slack_thread_is_the_same_however_it_is_linked() -> None:
 
 
 def issue(number: int, url: str = "") -> str:
-    """As `gh-issue-to-md` writes it; the url line is newer than the rest."""
+    """As `gh-issue-fetch` writes it; the url line is newer than the rest."""
     line = f"url: {url}\n" if url else ""
     return f'---\nnumber: {number}\n{line}date: 2026-09-30\ntitle: "History"\n---\n\n# History\n'
 

@@ -159,7 +159,7 @@ When I ask you to gather-context on a topic, do the following:
    - Code: thorough and careful research in all relevant repos (`~/src/temporalio`,
      `~/src/temporal-all/repos`), fetching latest branches and including in-progress PRs.
    - Temporal docs MCP, and the `oncall` repo for Temporal Cloud operations, when relevant.
-5. Fetch to disk the full content of every log issue written to by the exfiltrate using gh-issue-to-md.
+5. Fetch to disk the full content of every log issue written to by the exfiltrate using gh-issue-fetch.
 6. Read all of it and write a synthesis as a comment(s) in the new issue: the key findings
    first, then the evidence by source, with links.
 

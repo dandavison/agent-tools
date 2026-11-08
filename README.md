@@ -220,5 +220,5 @@ Then source `shell/agent.zsh` from your zshrc. To teach an agent these tools, li
 as a skill, e.g. `ln -s ~/src/agent-tools ~/.claude/skills/agent-tools`.
 
 Requires `uv`, `fzf`, `jq`, `rlwrap`, `tmux`, `atuin`, and whichever of `claude`, `codex`, `pi` you
-configure. `agent from-issues` also needs `gh-issue-to-md` from
+configure. `agent from-issues` also needs `gh-issue-fetch` from
 [dandavison/tools](https://github.com/dandavison/tools).
