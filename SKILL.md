@@ -343,6 +343,7 @@ Answer prompts left on the control channel, until interrupted.
 - `--once` — One pass, rather than staying up.
 - `--verbose` — Say something on every poll, not just events.
 - `--reset` — Clear the breaker and say what tripped it.
+- `--no-limits` — Disable the breaker, spend ceilings, rate, resubmission and staleness checks.
 
 ### `agent sessions cat ID[@POINT]`
 

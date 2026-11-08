@@ -57,6 +57,10 @@ MINUTE = 60.0
 
 DAY = 86_400.0
 
+# False under `attend --no-limits`: no check below raises, the breaker is
+# ignored, and old prompts run. For supervised use at the laptop only.
+ENABLED = True
+
 
 class Tripped(Exception):
     """A bound was crossed. Nothing runs again until it is cleared by hand."""
@@ -64,6 +68,8 @@ class Tripped(Exception):
 
 def guard() -> None:
     """Raise if the breaker is down. Called before a pass, and before a turn."""
+    if not ENABLED:
+        return
     if BREAKER.exists():
         raise Tripped(BREAKER.read_text().strip() or "no reason recorded")
 
@@ -85,6 +91,8 @@ def reset() -> str:
 
 def too_old(created: float) -> bool:
     """Whether a prompt is old enough that running it would be a backfill."""
+    if not ENABLED:
+        return False
     return created > 0 and (time.time() - created) > STALE
 
 
@@ -118,6 +126,8 @@ def check_rate(session_id: str) -> None:
     neither a slow pass nor the same prompt being looked at twice is mistaken
     for me typing faster than I ever do.
     """
+    if not ENABLED:
+        return
     mine = [r for r in _since(DAY) if r.get("session") == session_id]
     recent = {r.get("prompt"): r for r in mine if time.time() - float(r.get("made", 0)) <= MINUTE}
     if len(recent) > MOST_PER_MINUTE:
@@ -135,6 +145,8 @@ def check_not_resubmitting(prompt_id: int) -> None:
     genuinely do and running the same comment twice is never a thing I asked
     for. Every replay this thing has had would have stopped here.
     """
+    if not ENABLED:
+        return
     if prompt_id and prompt_id in _submitted():
         trip(f"prompt {prompt_id} was already run once — resubmission is a bug")
         raise Tripped(f"prompt {prompt_id} already run")
@@ -151,6 +163,8 @@ def check_spend() -> None:
     An hour as well as a day, because a runaway does its damage fast and a
     daily ceiling would let it run all afternoon before noticing.
     """
+    if not ENABLED:
+        return
     for window, cap, name in ((HOUR, PER_HOUR_USD, "an hour"), (DAY, PER_DAY_USD, "a day")):
         spent = sum(float(r.get("usd") or 0) for r in _since(window))
         if spent > cap:
