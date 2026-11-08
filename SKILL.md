@@ -231,6 +231,12 @@ Commands:
     
     agent ctx ~/src/temporalio-etc/log/recipes/batch-cancel.toml | agent with-input
 
+  describe-issues
+    Print each issue's title, then the first-line H1s of its body and comments, indented.
+
+    agent describe-issues 394 389 https://github.com/OWNER/REPO/issues/12
+    ISSUE is a number (log repo) or URL.
+
   exfiltrate
     Get the sessions that discussed a topic to write what they know into log issues.
 

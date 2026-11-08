@@ -202,6 +202,7 @@ executable. `agent sessions` finds, indexes and resumes past sessions;
 | `agent exfiltrate` | The prompt script that gets sessions to write what they know into log issues. |
 | `agent sessions` | Find, index and resume past sessions. |
 | `agent quiz` | Ask a prepared session and an existing one the same questions, side by side. |
+| `agent describe-issues` | List issues' titles, each with its body and comment titles indented. |
 | `agent overview` | Open a browser page summarising a recipe's sources, sizes and exclusions. |
 | `agent with-input` | Start an interactive agent with its input pre-filled from stdin. |
 | `agent from-issues` | Same, from GitHub issues. Reads `~/.config/agent-from-issues.toml`. |

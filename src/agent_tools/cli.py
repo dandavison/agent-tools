@@ -10,6 +10,7 @@ import click
 
 import agent_sessions.cli
 from agent_tools.ctx import OverBudget, SourceError, build, build_recipe
+from agent_tools.describe import describe_issues
 from agent_tools.overview import write_overview
 from agent_tools.quiz import quiz
 
@@ -225,6 +226,22 @@ def ctx_command(
     except OverBudget as e:
         click.echo(e.manifest, err=True, nl=False)
         raise click.ClickException("over budget; compression is not implemented") from e
+    except SourceError as e:
+        raise click.ClickException(str(e)) from e
+
+
+@cli.command("describe-issues")
+@click.argument("issues", nargs=-1, required=True)
+def describe_issues_command(issues: tuple[str, ...]) -> None:
+    """Print each issue's title, then the first-line H1s of its body and comments,
+    indented.
+
+    \b
+    agent describe-issues 394 389 https://github.com/OWNER/REPO/issues/12
+    ISSUE is a number (log repo) or URL.
+    """
+    try:
+        click.echo(describe_issues(list(issues)), nl=False)
     except SourceError as e:
         raise click.ClickException(str(e)) from e
 
