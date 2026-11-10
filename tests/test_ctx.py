@@ -1,4 +1,4 @@
-"""Tests for agent ctx, using fake gh, agent sessions, slack-fetch and tracecli."""
+"""Tests for agent ctx, using fake gh, agent sessions, slack-fetch, notion-fetch and tracecli."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import pytest
 AGENT = Path(sys.executable).parent / "agent"
 
 SLACK_URL = "https://temporaltechnologies.slack.com/archives/C07ABC/p1728000000000000"
+NOTION_URL = "https://app.notion.com/p/temporalio/Streaming-Blueprint-4058fc56773880cbbb2cc31c573ab3d3"
 ISSUE_URL = "https://github.com/temporalio/dandavison-log/issues/212"
 
 ISSUE = {
@@ -42,7 +43,7 @@ def home(tmp_path: Path) -> Path:
     heading containing their argv, then a code block."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for tool in ["agent", "slack-fetch", "tracecli"]:
+    for tool in ["agent", "slack-fetch", "notion-fetch", "tracecli"]:
         (bin_dir / tool).write_text(
             "#!/usr/bin/env bash\n"
             f'echo "# {tool} $*"\n'
@@ -112,6 +113,8 @@ def test_headings_are_demoted_outside_code_blocks(home: Path) -> None:
     [
         (SLACK_URL, f"slack-fetch {SLACK_URL}"),
         (f"slack:{SLACK_URL}", f"slack-fetch {SLACK_URL}"),
+        (NOTION_URL, f"notion-fetch {NOTION_URL}"),
+        (f"notion:{NOTION_URL}", f"notion-fetch {NOTION_URL}"),
         ("meeting:budget review", "tracecli transcript budget review"),
     ],
 )

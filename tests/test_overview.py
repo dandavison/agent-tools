@@ -119,6 +119,7 @@ def test_page_escapes_script_end_tags(home: Path) -> None:
 
 
 SLACK = "https://temporaltechnologies.slack.com/archives/C07ABC/p1728000000000000"
+NOTION = "https://www.notion.so/temporalio/Streaming-Blueprint-4058fc56773880cbbb2cc31c573ab3d3"
 LOG = "https://github.com/temporalio/dandavison-log/issues"
 
 
@@ -131,6 +132,8 @@ LOG = "https://github.com/temporalio/dandavison-log/issues"
         ("https://github.com/o/r/issues/5", "https://github.com/o/r/issues/5"),
         (f"slack:{SLACK}", SLACK),
         (SLACK, SLACK),
+        (f"notion:{NOTION}", NOTION),
+        (NOTION, NOTION),
         ("path:notes.md", "http://wormhole:7117/file/BASE/notes.md:1?land-in=editor"),
         ("path:*.md", None),
         ("session:claude:7e90 --whole", None),
