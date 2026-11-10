@@ -157,12 +157,12 @@ def resolve(uri: str, base: Path) -> str:
     if scheme == "issue" or uri.startswith("https://github.com/"):
         return read_issue(uri)
     if re.match(r"https://[^/]+\.slack\.com/", uri):
-        return run(uri, ["slack-to-md", uri])
+        return run(uri, ["slack-fetch", uri])
     match scheme:
         case "session":
             return read_session(uri, ref)
         case "slack":
-            return run(uri, ["slack-to-md", ref])
+            return run(uri, ["slack-fetch", ref])
         case "meeting":
             return run(uri, ["tracecli", "transcript", ref])
         case "path":

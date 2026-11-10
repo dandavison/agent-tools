@@ -74,7 +74,7 @@ find material newer than that:
 
 - Meetings: `tracecli list`, and transcript issues in the log like #411.
 - Slack: `agent-slack search messages` (with `--after`, and `--user` for the people
-  involved), grouped by thread; a thread is the source `slack:URL`, read by `slack-to-md`.
+  involved), grouped by thread; a thread is the source `slack:URL`, read by `slack-fetch`.
 - Sessions: `agent sessions sync`, then `agent sessions search` with several queries from
   B's topic, and `agent sessions show ID --turns` on each match. For each session on topic,
   find whether it wrote back after its last substantive turn: grep

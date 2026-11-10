@@ -205,7 +205,7 @@ def ctx_command(
     session:ID ["--whole"] ["--tools"]             agent sessions cat (without --whole,
                                                    only what followed the last compaction)
     session:ID@POINT                               the session up to that point's turn
-    slack:URL | SLACK_URL                          slack-to-md
+    slack:URL | SLACK_URL                          slack-fetch
     meeting:QUERY                                  tracecli transcript
     path:GLOB                                      matching files
     \b

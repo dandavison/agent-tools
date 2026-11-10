@@ -1,4 +1,4 @@
-"""Tests for agent ctx, using fake gh, agent sessions, slack-to-md and tracecli."""
+"""Tests for agent ctx, using fake gh, agent sessions, slack-fetch and tracecli."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def home(tmp_path: Path) -> Path:
     heading containing their argv, then a code block."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for tool in ["agent", "slack-to-md", "tracecli"]:
+    for tool in ["agent", "slack-fetch", "tracecli"]:
         (bin_dir / tool).write_text(
             "#!/usr/bin/env bash\n"
             f'echo "# {tool} $*"\n'
@@ -110,8 +110,8 @@ def test_headings_are_demoted_outside_code_blocks(home: Path) -> None:
 @pytest.mark.parametrize(
     "source, heading",
     [
-        (SLACK_URL, f"slack-to-md {SLACK_URL}"),
-        (f"slack:{SLACK_URL}", f"slack-to-md {SLACK_URL}"),
+        (SLACK_URL, f"slack-fetch {SLACK_URL}"),
+        (f"slack:{SLACK_URL}", f"slack-fetch {SLACK_URL}"),
         ("meeting:budget review", "tracecli transcript budget review"),
     ],
 )
