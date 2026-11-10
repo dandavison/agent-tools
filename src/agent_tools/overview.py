@@ -13,6 +13,7 @@ from agent_tools.ctx import (
     HEADING,
     ISSUE,
     LOG_REPO,
+    NOTION,
     Source,
     SourceError,
     load_recipe,
@@ -76,9 +77,9 @@ def source_url(uri: str, base: Path) -> str | None:
     scheme, _, ref = uri.partition(":")
     if scheme == "issue" or uri.startswith("https://github.com/"):
         return issue_url(uri.split()[0])
-    if scheme == "slack":
+    if scheme in ("slack", "notion"):
         return ref
-    if SLACK.match(uri):
+    if SLACK.match(uri) or NOTION.match(uri):
         return uri
     if scheme == "path" and not any(c in ref for c in "*?["):
         return wormhole_url(base / ref)

@@ -21,6 +21,7 @@ ISSUE = re.compile(
     r"(?:#(?P<comment>issuecomment-\d+))?$"
 )
 LOG_REPO = "temporalio/dandavison-log"
+NOTION = re.compile(r"https://(?:[^/]+\.)?notion\.(?:so|com)/")
 SESSION_OPTIONS = {"--whole", "--tools"}
 
 
@@ -158,11 +159,15 @@ def resolve(uri: str, base: Path) -> str:
         return read_issue(uri)
     if re.match(r"https://[^/]+\.slack\.com/", uri):
         return run(uri, ["slack-fetch", uri])
+    if NOTION.match(uri):
+        return run(uri, ["notion-fetch", uri])
     match scheme:
         case "session":
             return read_session(uri, ref)
         case "slack":
             return run(uri, ["slack-fetch", ref])
+        case "notion":
+            return run(uri, ["notion-fetch", ref])
         case "meeting":
             return run(uri, ["tracecli", "transcript", ref])
         case "path":

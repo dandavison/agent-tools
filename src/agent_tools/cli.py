@@ -206,6 +206,7 @@ def ctx_command(
                                                    only what followed the last compaction)
     session:ID@POINT                               the session up to that point's turn
     slack:URL | SLACK_URL                          slack-fetch
+    notion:URL | NOTION_URL                        notion-fetch
     meeting:QUERY                                  tracecli transcript
     path:GLOB                                      matching files
     \b
